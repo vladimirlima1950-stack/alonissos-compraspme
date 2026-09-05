@@ -123,8 +123,8 @@ def calcular_otif(df):
 # ---------- CONSOLIDAÇÃO MENSAL ----------
 
 def consolidar_mensal(df):
-    df["ano"] = df["dta_desejada_amer"].dt.year
-    df["mes"] = df["dta_desejada_amer"].dt.month
+    df["ano"] = df["dta_desejada_amer"].dt.year.astype(int)
+    df["mes"] = df["dta_desejada_amer"].dt.month.astype(int)
 
     consol = df.groupby(["ano", "mes"]).agg(
         total_linhas=("sku", "count"),
@@ -141,47 +141,35 @@ def consolidar_mensal(df):
 # ---------- FUNÇÃO PRINCIPAL ----------
 
 def processar_otif(pedidos_path, faturamentos_path):
-    # Carregar arquivos
     pedidos_raw = carregar_csv_duckdb(pedidos_path)
     fatur_raw = carregar_csv_duckdb(faturamentos_path)
 
-    # Preparar dados
     pedidos = preparar_pedidos(pedidos_raw)
     fatur = preparar_faturamentos(fatur_raw)
 
-    # Cruzar
     ped_fatur = cruzar_pedidos_faturamentos(pedidos, fatur)
-
-    # Calcular OTIF
     ped_fatur = calcular_otif(ped_fatur)
 
-    # Consolidação mensal
     consol = consolidar_mensal(ped_fatur)
 
-    # Gerar arquivo Excel
+    # Gera o arquivo Excel
     arquivo_xlsx = "resultado_otif.xlsx"
     with pd.ExcelWriter(arquivo_xlsx) as writer:
         consol.to_excel(writer, sheet_name="Consolidado", index=False)
         ped_fatur.to_excel(writer, sheet_name="Detalhes", index=False)
 
-    return consol, ped_fatur, arquivo_xlsx
+    # Retorna apenas o caminho do arquivo (string)
+    return arquivo_xlsx
 
 
 # ---------- ENVIO DE E-MAIL ----------
 
-def enviar_email_otif(destinatario, consol, detalhes, arquivo_xlsx):
+def enviar_email_otif(destinatario, arquivo_xlsx):
     resend.api_key = os.getenv("RESEND_API_KEY")
 
     texto = "Prezado cliente,\n\n"
     texto += "Segue o resultado do processamento OTIF.\n\n"
-
-    texto += "Resumo Mensal:\n"
-    for _, row in consol.iterrows():
-        mes = int(row["mes"]) if pd.notna(row["mes"]) else 0
-        ano = int(row["ano"]) if pd.notna(row["ano"]) else 0
-        texto += f"- {mes:02d}/{ano}: {row['nivel_servico']:.2f}%\n"
-
-    texto += "\nO arquivo Excel com o gráfico e consolidação está anexado.\n"
+    texto += "O arquivo Excel com o gráfico e consolidação está anexado.\n"
     texto += "\nAtenciosamente,\nMUPE Consultoria"
 
     with open(arquivo_xlsx, "rb") as f:

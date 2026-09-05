@@ -9,36 +9,6 @@ from modules.otif import (
     enviar_email_otif
 )
 
-
-# ============================================================
-# Função necessária: converter arquivo para UTF‑8
-# ============================================================
-def converter_para_utf8(caminho_arquivo):
-    try:
-        # Lê o arquivo em binário
-        with open(caminho_arquivo, "rb") as f:
-            conteudo = f.read()
-
-        # Tenta decodificar como UTF‑8
-        try:
-            texto = conteudo.decode("utf-8")
-        except UnicodeDecodeError:
-            # Se falhar, tenta Latin‑1
-            texto = conteudo.decode("latin-1")
-
-        # Regrava o arquivo em UTF‑8
-        with open(caminho_arquivo, "w", encoding="utf-8") as f:
-            f.write(texto)
-
-        return True, "Arquivo convertido para UTF‑8."
-
-    except Exception as e:
-        return False, f"Erro ao converter para UTF‑8: {str(e)}"
-
-
-# ============================================================
-# Configuração da API
-# ============================================================
 app = FastAPI()
 
 UPLOAD_DIR = "uploads"
@@ -53,9 +23,6 @@ def home():
     return {"status": "online", "mensagem": "API OTIF funcionando"}
 
 
-# ============================================================
-# Upload de pedidos
-# ============================================================
 @app.post("/upload_pedidos")
 async def upload_pedidos(file: UploadFile = File(...)):
     global pedidos_path
@@ -99,9 +66,6 @@ async def upload_pedidos(file: UploadFile = File(...)):
         )
 
 
-# ============================================================
-# Upload de faturamentos
-# ============================================================
 @app.post("/upload_faturamentos")
 async def upload_faturamentos(file: UploadFile = File(...)):
     global faturamentos_path
@@ -145,9 +109,6 @@ async def upload_faturamentos(file: UploadFile = File(...)):
         )
 
 
-# ============================================================
-# Processamento OTIF
-# ============================================================
 @app.get("/processar_otif")
 def processar_otif_api():
     global pedidos_path, faturamentos_path
@@ -159,15 +120,16 @@ def processar_otif_api():
         )
 
     try:
-        consol, detalhes, arquivo = processar_otif(pedidos_path, faturamentos_path)
+        # Agora processar_otif retorna APENAS o caminho do arquivo XLSX
+        arquivo = processar_otif(pedidos_path, faturamentos_path)
 
         destinatario = os.getenv("CLIENT_EMAIL")
-        enviar_email_otif(destinatario, consol, detalhes, arquivo)
+        enviar_email_otif(destinatario, arquivo)
 
         return {
             "status": "processado",
             "mensagem": "Processamento concluído e enviado por e-mail.",
-            "arquivo_xlsx": arquivo
+            "arquivo_xlsx": str(arquivo)
         }
 
     except Exception as e:
