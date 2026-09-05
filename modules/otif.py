@@ -6,6 +6,21 @@ import smtplib
 from email.message import EmailMessage
 
 # ============================================================
+# Função de LOG (console + arquivo, modo append)
+# ============================================================
+
+def log(msg):
+    print(msg)  # console do Railway
+
+    log_path = os.path.join("uploads", "log.txt")
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except Exception as e:
+        print(f"Falha ao escrever log: {e}")
+
+
+# ============================================================
 # 1) Validação dos CSVs
 # ============================================================
 
@@ -52,11 +67,20 @@ def validar_csv_faturamentos(caminho_faturamentos: str):
 
 
 # ============================================================
-# 2) Processamento OTIF — versão fiel ao MySQL
+# 2) Processamento OTIF — versão fiel ao MySQL + logs resumidos
 # ============================================================
 
 def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
     try:
+        # --------------------------------------------------------
+        # Separador de execução
+        # --------------------------------------------------------
+        log("############################################################")
+        log(f"# OTIF EXECUTADO EM {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log("############################################################")
+
+        log("Iniciando OTIF...")
+
         # --------------------------------------------------------
         # Leitura com DuckDB (mantido conforme solicitado)
         # --------------------------------------------------------
@@ -76,6 +100,9 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             all_varchar=True
         ).df()
 
+        log(f"Pedidos lidos: {len(pedidos)} linhas")
+        log(f"Faturamentos lidos: {len(fatur)} linhas")
+
         # --------------------------------------------------------
         # Renomeia colunas conforme MySQL
         # --------------------------------------------------------
@@ -86,19 +113,20 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         # FASE 1 — equivalente ao sp1 (limpeza e conversão)
         # ============================================================
 
-        # Quantidades negativas viram zero
+        log("Convertendo quantidades...")
+
         pedidos["qde_pedida"] = pd.to_numeric(pedidos["qde_pedida"], errors="coerce").fillna(0)
         pedidos.loc[pedidos["qde_pedida"] < 0, "qde_pedida"] = 0
 
         fatur["qde_fatur"] = pd.to_numeric(fatur["qde_fatur"], errors="coerce").fillna(0)
         fatur.loc[fatur["qde_fatur"] < 0, "qde_fatur"] = 0
 
-        # Datas: converter dd/mm/yyyy → datetime
+        log("Convertendo datas...")
+
         pedidos["dta_desejada_amer"] = pd.to_datetime(
             pedidos["dta_desejada"], errors="coerce", dayfirst=True
         )
 
-        # Faturamento: datas nulas recebem data padrão (igual ao MySQL)
         ano_ref = date.today().year
         mes_ref = date.today().month - 2
         if mes_ref <= 0:
@@ -116,13 +144,15 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         # FASE 2 — equivalente ao sp2 (junção pedidos + faturamentos)
         # ============================================================
 
-        # Resumo de faturamento por ordem + sku
+        log("Executando resumo de faturamento...")
+
         resumo = fatur.groupby(["numero_ordem", "sku"]).agg(
             max_data=("dta_efetiva_amer", "max"),
             tot_fatur=("qde_fatur", "sum")
         ).reset_index()
 
-        # Junta pedidos + faturamentos
+        log("Executando merge pedidos + faturamentos...")
+
         ped_fatur = pd.merge(
             pedidos,
             fatur,
@@ -131,7 +161,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             how="left"
         )
 
-        # Aplica resumo (max_data e tot_fatur)
         ped_fatur = pd.merge(
             ped_fatur,
             resumo,
@@ -140,14 +169,17 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             how="left"
         )
 
+        log(f"Linhas após merge: {len(ped_fatur)}")
+
         # ============================================================
         # FASE 3 — equivalente ao sp3 (pontuações OTIF)
         # ============================================================
 
+        log("Calculando pontuações OTIF...")
+
         ped_fatur["max_data"] = ped_fatur["max_data"].fillna(pd.NaT)
         ped_fatur["tot_fatur"] = ped_fatur["tot_fatur"].fillna(0)
 
-        # Pontuações
         ped_fatur["pontua_data"] = (
             ped_fatur["max_data"] <= ped_fatur["dta_desejada_amer"]
         ).astype(int)
@@ -160,7 +192,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             (ped_fatur["pontua_data"] + ped_fatur["pontua_qde"]) == 2
         ).astype(int)
 
-        # Consolidação por ano/mês
         ped_fatur["ano"] = ped_fatur["dta_desejada_amer"].dt.year
         ped_fatur["mes"] = ped_fatur["dta_desejada_amer"].dt.month
 
@@ -176,6 +207,8 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         # ============================================================
         # FASE 4 — equivalente ao sp4 (backorder)
         # ============================================================
+
+        log("Calculando backorder...")
 
         fase3 = ped_fatur[ped_fatur["tot_fatur"] < ped_fatur["qde_pedida"]].copy()
         fase3["dias_pendentes"] = (
@@ -195,6 +228,8 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         # FASE FINAL — gerar Excel
         # ============================================================
 
+        log("Gerando Excel...")
+
         pasta_saida = os.path.dirname(caminho_pedidos)
         arquivo_xlsx = os.path.join(
             pasta_saida,
@@ -207,9 +242,13 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             fase3.to_excel(writer, sheet_name="Backorder_Detalhes", index=False)
             fase4.to_excel(writer, sheet_name="Backorder_Resumo", index=False)
 
+        log(f"Excel gerado: {arquivo_xlsx}")
+        log("Processamento OTIF concluído.")
+
         return arquivo_xlsx
 
     except Exception as e:
+        log(f"Erro interno: {e}")
         raise Exception(f"Falha ao processar OTIF: {e}")
 
 
