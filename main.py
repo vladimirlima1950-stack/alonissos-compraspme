@@ -1,8 +1,39 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import os
+
 from modules.otif import processar_otif, validar_csv_pedidos, validar_csv_faturamentos
 
+
+# ============================================================
+# Função necessária: converter arquivo para UTF‑8
+# ============================================================
+def converter_para_utf8(caminho_arquivo):
+    try:
+        # Lê o arquivo em binário
+        with open(caminho_arquivo, "rb") as f:
+            conteudo = f.read()
+
+        # Tenta decodificar como UTF‑8
+        try:
+            texto = conteudo.decode("utf-8")
+        except UnicodeDecodeError:
+            # Se falhar, tenta Latin‑1
+            texto = conteudo.decode("latin-1")
+
+        # Regrava o arquivo em UTF‑8
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            f.write(texto)
+
+        return True, "Arquivo convertido para UTF‑8."
+
+    except Exception as e:
+        return False, f"Erro ao converter para UTF‑8: {str(e)}"
+
+
+# ============================================================
+# Configuração da API
+# ============================================================
 app = FastAPI()
 
 UPLOAD_DIR = "uploads"
@@ -17,6 +48,9 @@ def home():
     return {"status": "online", "mensagem": "API OTIF funcionando"}
 
 
+# ============================================================
+# Upload de pedidos
+# ============================================================
 @app.post("/upload_pedidos")
 async def upload_pedidos(file: UploadFile = File(...)):
     global pedidos_path
@@ -35,7 +69,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
         with open(pedidos_path, "wb") as f:
             f.write(contents)
 
-        # 2) CONVERTE PARA UTF‑8 AQUI
+        # 2) CONVERTE PARA UTF‑8
         ok_conv, msg_conv = converter_para_utf8(pedidos_path)
         if not ok_conv:
             return JSONResponse(
@@ -60,7 +94,9 @@ async def upload_pedidos(file: UploadFile = File(...)):
         )
 
 
-
+# ============================================================
+# Upload de faturamentos
+# ============================================================
 @app.post("/upload_faturamentos")
 async def upload_faturamentos(file: UploadFile = File(...)):
     global faturamentos_path
@@ -79,7 +115,7 @@ async def upload_faturamentos(file: UploadFile = File(...)):
         with open(faturamentos_path, "wb") as f:
             f.write(contents)
 
-        # 2) CONVERTE PARA UTF‑8 AQUI
+        # 2) CONVERTE PARA UTF‑8
         ok_conv, msg_conv = converter_para_utf8(faturamentos_path)
         if not ok_conv:
             return JSONResponse(
@@ -104,6 +140,9 @@ async def upload_faturamentos(file: UploadFile = File(...)):
         )
 
 
+# ============================================================
+# Processamento OTIF
+# ============================================================
 @app.get("/processar_otif")
 def processar_otif_api():
     global pedidos_path, faturamentos_path

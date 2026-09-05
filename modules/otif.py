@@ -3,28 +3,11 @@ import duckdb
 import resend
 import os
 
-def converter_para_utf8(path):
-    # Lê o arquivo como bytes
-    with open(path, "rb") as f:
-        conteudo = f.read()
 
-    # Tenta decodificar em vários encodings comuns
-    for enc in ["utf-8", "latin1", "iso-8859-1", "cp1252", "utf-16"]:
-        try:
-            texto = conteudo.decode(enc)
-            # Se decodificou, regrava como UTF‑8
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(texto)
-            return True, f"Arquivo convertido de {enc} para UTF‑8."
-        except:
-            pass
-
-    return False, "Não foi possível converter o arquivo para UTF‑8."
-
+# ---------- CARREGAMENTO CSV ----------
 
 def carregar_csv_duckdb(path):
     con = duckdb.connect()
-    # lê como texto, sem tentar adivinhar tipos
     df = con.execute(
         f"""
         SELECT * FROM read_csv_auto(
@@ -46,10 +29,8 @@ def validar_csv_pedidos(path):
     if df.shape[1] != 5:
         return False, f"Arquivo de pedidos deve ter exatamente 5 colunas. Encontradas: {df.shape[1]}."
 
-    # leitura por posição, ignorando nomes
     df.columns = ["ordem_raw", "cliente_raw", "dta_desejada_raw", "sku_raw", "qde_pedida_raw"]
 
-    # valida formato básico da data (contém '/')
     if not df["dta_desejada_raw"].str.contains("/").all():
         return False, "A coluna de data desejada (3ª coluna) deve estar no formato DD/MM/AAAA."
 
@@ -73,7 +54,6 @@ def validar_csv_faturamentos(path):
 # ---------- PREPARAÇÃO DOS DADOS ----------
 
 def preparar_pedidos(df):
-    # renomeia por posição
     df.columns = ["ordem_raw", "cliente_raw", "dta_desejada_raw", "sku_raw", "qde_pedida_raw"]
 
     df["ordem"] = df["ordem_raw"].str.strip()
@@ -178,14 +158,20 @@ def processar_otif(pedidos_path, faturamentos_path):
     # Consolidação mensal
     consol = consolidar_mensal(ped_fatur)
 
-    return consol, ped_fatur
+    # Gerar arquivo Excel
+    arquivo_xlsx = "resultado_otif.xlsx"
+    with pd.ExcelWriter(arquivo_xlsx) as writer:
+        consol.to_excel(writer, sheet_name="Consolidado", index=False)
+        ped_fatur.to_excel(writer, sheet_name="Detalhes", index=False)
+
+    return consol, ped_fatur, arquivo_xlsx
 
 
+# ---------- ENVIO DE E-MAIL ----------
 
 def enviar_email_otif(destinatario, consol, detalhes, arquivo_xlsx):
     resend.api_key = os.getenv("RESEND_API_KEY")
 
-    # Corpo do e-mail
     texto = "Prezado cliente,\n\n"
     texto += "Segue o resultado do processamento OTIF.\n\n"
 
@@ -193,18 +179,12 @@ def enviar_email_otif(destinatario, consol, detalhes, arquivo_xlsx):
     for _, row in consol.iterrows():
         texto += f"- {row['mes']:02d}/{row['ano']}: {row['nivel_servico']:.2f}%\n"
 
-    if "idade_media_bo" in consol.columns:
-        idade_media = consol["idade_media_bo"].mean()
-        texto += f"\nIdade média do BO: {idade_media:.1f} dias\n"
-
     texto += "\nO arquivo Excel com o gráfico e consolidação está anexado.\n"
     texto += "\nAtenciosamente,\nMUPE Consultoria"
 
-    # Ler o arquivo XLSX para anexar
     with open(arquivo_xlsx, "rb") as f:
         conteudo_xlsx = f.read()
 
-    # Enviar via Resend
     resend.Emails.send({
         "from": "MUPE Consultoria <noreply@mupe.com.br>",
         "to": destinatario,
