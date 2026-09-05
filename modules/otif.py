@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, date
 import duckdb
 import pandas as pd
 import smtplib
@@ -52,15 +52,15 @@ def validar_csv_faturamentos(caminho_faturamentos: str):
 
 
 # ============================================================
-# 2) Processamento OTIF
+# 2) Processamento OTIF — versão fiel ao MySQL
 # ============================================================
 
 def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
     try:
         # --------------------------------------------------------
-        # Leitura robusta com DuckDB (aceita qualquer encoding)
+        # Leitura com DuckDB (mantido conforme solicitado)
         # --------------------------------------------------------
-        pedidos_raw = duckdb.read_csv(
+        pedidos = duckdb.read_csv(
             caminho_pedidos,
             header=True,
             sep=";",
@@ -68,7 +68,7 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             all_varchar=True
         ).df()
 
-        fatur_raw = duckdb.read_csv(
+        fatur = duckdb.read_csv(
             caminho_faturamentos,
             header=True,
             sep=";",
@@ -77,91 +77,135 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         ).df()
 
         # --------------------------------------------------------
-        # Renomeia colunas (ajuste conforme seu layout real)
+        # Renomeia colunas conforme MySQL
         # --------------------------------------------------------
-        pedidos_raw.columns = ["ordem", "cliente", "data_desejada", "sku", "qtd_pedida"]
-        fatur_raw.columns   = ["data_fatur", "cliente", "sku", "qtd_faturada", "ordem_venda"]
+        pedidos.columns = ["ordem", "cliente", "dta_desejada", "sku", "qde_pedida"]
+        fatur.columns   = ["dta_efetiva", "cliente", "sku", "qde_fatur", "numero_ordem"]
 
-        # --------------------------------------------------------
-        # Converte datas de forma robusta
-        # --------------------------------------------------------
-        pedidos_raw["data_desejada"] = pd.to_datetime(
-            pedidos_raw["data_desejada"], errors="coerce", dayfirst=True
+        # ============================================================
+        # FASE 1 — equivalente ao sp1 (limpeza e conversão)
+        # ============================================================
+
+        # Quantidades negativas viram zero
+        pedidos["qde_pedida"] = pd.to_numeric(pedidos["qde_pedida"], errors="coerce").fillna(0)
+        pedidos.loc[pedidos["qde_pedida"] < 0, "qde_pedida"] = 0
+
+        fatur["qde_fatur"] = pd.to_numeric(fatur["qde_fatur"], errors="coerce").fillna(0)
+        fatur.loc[fatur["qde_fatur"] < 0, "qde_fatur"] = 0
+
+        # Datas: converter dd/mm/yyyy → datetime
+        pedidos["dta_desejada_amer"] = pd.to_datetime(
+            pedidos["dta_desejada"], errors="coerce", dayfirst=True
         )
 
-        fatur_raw["data_fatur"] = pd.to_datetime(
-            fatur_raw["data_fatur"], errors="coerce", dayfirst=True
+        # Faturamento: datas nulas recebem data padrão (igual ao MySQL)
+        ano_ref = date.today().year
+        mes_ref = date.today().month - 2
+        if mes_ref <= 0:
+            mes_ref += 12
+            ano_ref -= 1
+        data_padrao = date(ano_ref, mes_ref, 1)
+
+        fatur["dta_efetiva"] = fatur["dta_efetiva"].replace("", None)
+        fatur["dta_efetiva_amer"] = pd.to_datetime(
+            fatur["dta_efetiva"], errors="coerce", dayfirst=True
         )
+        fatur["dta_efetiva_amer"] = fatur["dta_efetiva_amer"].fillna(data_padrao)
 
-        # --------------------------------------------------------
-        # Junta pedidos x faturamentos
-        # --------------------------------------------------------
-        ped_fatur = pd.merge(
-            pedidos_raw,
-            fatur_raw,
-            left_on=["ordem", "cliente", "sku"],
-            right_on=["ordem_venda", "cliente", "sku"],
-            how="left",
-            suffixes=("_ped", "_fat")
-        )
+        # ============================================================
+        # FASE 2 — equivalente ao sp2 (junção pedidos + faturamentos)
+        # ============================================================
 
-        # --------------------------------------------------------
-        # Remove linhas com datas inválidas
-        # --------------------------------------------------------
-        ped_fatur = ped_fatur.dropna(subset=["data_fatur", "data_desejada"])
-
-        # --------------------------------------------------------
-        # Converte quantidades para número
-        # --------------------------------------------------------
-        ped_fatur["qtd_pedida"] = pd.to_numeric(
-            ped_fatur["qtd_pedida"], errors="coerce"
-        ).fillna(0)
-
-        ped_fatur["qtd_faturada"] = pd.to_numeric(
-            ped_fatur["qtd_faturada"], errors="coerce"
-        ).fillna(0)
-
-        # --------------------------------------------------------
-        # Cálculo OTIF
-        # --------------------------------------------------------
-        ped_fatur["atendido"] = ped_fatur["qtd_faturada"]
-
-        ped_fatur["otif_qtd"] = (
-            ped_fatur["atendido"] >= ped_fatur["qtd_pedida"]
-        ).astype(int)
-
-        ped_fatur["otif_prazo"] = (
-            ped_fatur["data_fatur"] <= ped_fatur["data_desejada"]
-        ).astype(int)
-
-        ped_fatur["otif_total"] = (
-            (ped_fatur["otif_qtd"] == 1) &
-            (ped_fatur["otif_prazo"] == 1)
-        ).astype(int)
-
-        # --------------------------------------------------------
-        # Consolidação por cliente
-        # --------------------------------------------------------
-        consol = ped_fatur.groupby("cliente").agg(
-            pedidos=("ordem", "nunique"),
-            itens=("sku", "nunique"),
-            otif_qtd=("otif_qtd", "mean"),
-            otif_prazo=("otif_prazo", "mean"),
-            otif_total=("otif_total", "mean"),
+        # Resumo de faturamento por ordem + sku
+        resumo = fatur.groupby(["numero_ordem", "sku"]).agg(
+            max_data=("dta_efetiva_amer", "max"),
+            tot_fatur=("qde_fatur", "sum")
         ).reset_index()
 
-        # --------------------------------------------------------
-        # Gera Excel
-        # --------------------------------------------------------
+        # Junta pedidos + faturamentos
+        ped_fatur = pd.merge(
+            pedidos,
+            fatur,
+            left_on=["ordem", "sku"],
+            right_on=["numero_ordem", "sku"],
+            how="left"
+        )
+
+        # Aplica resumo (max_data e tot_fatur)
+        ped_fatur = pd.merge(
+            ped_fatur,
+            resumo,
+            left_on=["ordem", "sku"],
+            right_on=["numero_ordem", "sku"],
+            how="left"
+        )
+
+        # ============================================================
+        # FASE 3 — equivalente ao sp3 (pontuações OTIF)
+        # ============================================================
+
+        ped_fatur["max_data"] = ped_fatur["max_data"].fillna(pd.NaT)
+        ped_fatur["tot_fatur"] = ped_fatur["tot_fatur"].fillna(0)
+
+        # Pontuações
+        ped_fatur["pontua_data"] = (
+            ped_fatur["max_data"] <= ped_fatur["dta_desejada_amer"]
+        ).astype(int)
+
+        ped_fatur["pontua_qde"] = (
+            ped_fatur["tot_fatur"] >= ped_fatur["qde_pedida"]
+        ).astype(int)
+
+        ped_fatur["pontua_total"] = (
+            (ped_fatur["pontua_data"] + ped_fatur["pontua_qde"]) == 2
+        ).astype(int)
+
+        # Consolidação por ano/mês
+        ped_fatur["ano"] = ped_fatur["dta_desejada_amer"].dt.year
+        ped_fatur["mes"] = ped_fatur["dta_desejada_amer"].dt.month
+
+        consol_fase2 = ped_fatur.groupby(["ano", "mes"]).agg(
+            total_linhas=("sku", "count"),
+            linhas_atendidas=("pontua_total", "sum")
+        ).reset_index()
+
+        consol_fase2["nivel_servico_perct"] = (
+            consol_fase2["linhas_atendidas"] / consol_fase2["total_linhas"] * 100
+        )
+
+        # ============================================================
+        # FASE 4 — equivalente ao sp4 (backorder)
+        # ============================================================
+
+        fase3 = ped_fatur[ped_fatur["tot_fatur"] < ped_fatur["qde_pedida"]].copy()
+        fase3["dias_pendentes"] = (
+            pd.Timestamp(date.today()) - fase3["dta_desejada_amer"]
+        ).dt.days
+
+        fase4 = pd.DataFrame({
+            "total_ordens": [fase3["ordem"].nunique()],
+            "total_dias": [fase3["dias_pendentes"].sum()]
+        })
+        fase4["idade_backorder"] = (
+            fase4["total_dias"] / fase4["total_ordens"]
+            if fase4["total_ordens"][0] > 0 else 0
+        )
+
+        # ============================================================
+        # FASE FINAL — gerar Excel
+        # ============================================================
+
         pasta_saida = os.path.dirname(caminho_pedidos)
         arquivo_xlsx = os.path.join(
             pasta_saida,
-            f"OTIF_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            f"OTIF_COMPLETO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         )
 
         with pd.ExcelWriter(arquivo_xlsx) as writer:
-            consol.to_excel(writer, sheet_name="Consolidado", index=False)
-            ped_fatur.to_excel(writer, sheet_name="Detalhes", index=False)
+            ped_fatur.to_excel(writer, sheet_name="Ped_Fatur", index=False)
+            consol_fase2.to_excel(writer, sheet_name="Nivel_Servico", index=False)
+            fase3.to_excel(writer, sheet_name="Backorder_Detalhes", index=False)
+            fase4.to_excel(writer, sheet_name="Backorder_Resumo", index=False)
 
         return arquivo_xlsx
 
