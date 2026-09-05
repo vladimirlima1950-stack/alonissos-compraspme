@@ -4,6 +4,8 @@ from datetime import datetime, date
 import duckdb
 import pandas as pd
 import requests
+import matplotlib.pyplot as plt
+from io import BytesIO
 
 # ============================================================
 # Função de LOG (console + arquivo)
@@ -199,6 +201,32 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             if fase4["total_ordens"][0] > 0 else 0
         )
 
+        # ============================================================
+        # 3) Criar gráfico OTIF
+        # ============================================================
+
+        log("Gerando gráfico OTIF...")
+
+        consol_fase2["ano_mes"] = consol_fase2["ano"].astype(str) + "-" + consol_fase2["mes"].astype(str)
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(consol_fase2["ano_mes"], consol_fase2["nivel_servico_perct"],
+                 marker="o", color="#2563eb")
+        plt.title("Nível de Serviço OTIF")
+        plt.xlabel("Ano-Mês")
+        plt.ylabel("Percentual (%)")
+        plt.grid(True)
+        plt.xticks(rotation=45)
+
+        img_data = BytesIO()
+        plt.savefig(img_data, format="png", bbox_inches="tight")
+        plt.close()
+        img_data.seek(0)
+
+        # ============================================================
+        # 4) Gerar Excel com gráfico na primeira aba
+        # ============================================================
+
         log("Gerando Excel...")
 
         pasta_saida = os.path.dirname(caminho_pedidos)
@@ -207,7 +235,14 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             f"OTIF_COMPLETO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         )
 
-        with pd.ExcelWriter(arquivo_xlsx) as writer:
+        with pd.ExcelWriter(arquivo_xlsx, engine="xlsxwriter") as writer:
+            workbook  = writer.book
+
+            # Aba do gráfico
+            worksheet_graf = workbook.add_worksheet("Grafico_OTIF")
+            worksheet_graf.insert_image("B2", "grafico.png", {"image_data": img_data})
+
+            # Demais abas
             ped_fatur.to_excel(writer, sheet_name="Ped_Fatur", index=False)
             consol_fase2.to_excel(writer, sheet_name="Nivel_Servico", index=False)
             fase3.to_excel(writer, sheet_name="Backorder_Detalhes", index=False)
@@ -224,7 +259,7 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
 
 
 # ============================================================
-# 3) Envio de e-mail via RESEND
+# 5) Envio de e-mail via RESEND
 # ============================================================
 
 def enviar_email_otif(arquivo_xlsx: str, email_destino: str):
