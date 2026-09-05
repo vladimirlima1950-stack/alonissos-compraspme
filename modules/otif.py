@@ -3,6 +3,24 @@ import duckdb
 import resend
 import os
 
+def converter_para_utf8(path):
+    # Lê o arquivo como bytes
+    with open(path, "rb") as f:
+        conteudo = f.read()
+
+    # Tenta decodificar em vários encodings comuns
+    for enc in ["utf-8", "latin1", "iso-8859-1", "cp1252", "utf-16"]:
+        try:
+            texto = conteudo.decode(enc)
+            # Se decodificou, regrava como UTF‑8
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(texto)
+            return True, f"Arquivo convertido de {enc} para UTF‑8."
+        except:
+            pass
+
+    return False, "Não foi possível converter o arquivo para UTF‑8."
+
 
 def carregar_csv_duckdb(path):
     con = duckdb.connect()

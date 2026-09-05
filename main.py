@@ -31,9 +31,19 @@ async def upload_pedidos(file: UploadFile = File(...)):
                 content={"status": "erro", "mensagem": "Arquivo de pedidos está vazio ou muito pequeno."}
             )
 
+        # 1) SALVA O ARQUIVO
         with open(pedidos_path, "wb") as f:
             f.write(contents)
 
+        # 2) CONVERTE PARA UTF‑8 AQUI
+        ok_conv, msg_conv = converter_para_utf8(pedidos_path)
+        if not ok_conv:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "erro", "mensagem": msg_conv}
+            )
+
+        # 3) VALIDA O ARQUIVO
         ok, msg = validar_csv_pedidos(pedidos_path)
         if not ok:
             return JSONResponse(
@@ -50,6 +60,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
         )
 
 
+
 @app.post("/upload_faturamentos")
 async def upload_faturamentos(file: UploadFile = File(...)):
     global faturamentos_path
@@ -64,9 +75,19 @@ async def upload_faturamentos(file: UploadFile = File(...)):
                 content={"status": "erro", "mensagem": "Arquivo de faturamentos está vazio ou muito pequeno."}
             )
 
+        # 1) SALVA O ARQUIVO
         with open(faturamentos_path, "wb") as f:
             f.write(contents)
 
+        # 2) CONVERTE PARA UTF‑8 AQUI
+        ok_conv, msg_conv = converter_para_utf8(faturamentos_path)
+        if not ok_conv:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "erro", "mensagem": msg_conv}
+            )
+
+        # 3) VALIDA O ARQUIVO
         ok, msg = validar_csv_faturamentos(faturamentos_path)
         if not ok:
             return JSONResponse(
