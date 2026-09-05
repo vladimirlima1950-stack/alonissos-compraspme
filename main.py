@@ -2,7 +2,12 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import os
 
-from modules.otif import processar_otif, validar_csv_pedidos, validar_csv_faturamentos
+from modules.otif import (
+    processar_otif,
+    validar_csv_pedidos,
+    validar_csv_faturamentos,
+    enviar_email_otif
+)
 
 
 # ============================================================
