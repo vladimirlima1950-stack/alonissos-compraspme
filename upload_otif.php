@@ -96,30 +96,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($pedidosOK && $faturamentosOK) {
 
-        // Chama processamento OTIF
+        // Chama processamento OTIF (assíncrono)
         $curl = curl_init();
         curl_setopt_array($curl, [
-            CURLOPT_URL            => "$railway_base/processar_otif",
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 120
+            CURLOPT_URL            => "$railway_base/processar_otif?email=$emailCliente",
+            CURLOPT_RETURNTRANSFER => false,  // não espera resposta
+            CURLOPT_TIMEOUT        => 5       // tempo suficiente para disparar
         ]);
-
-        $respostaProcessamento = curl_exec($curl);
-        $erroCurlProc          = curl_error($curl);
+        curl_exec($curl);
         curl_close($curl);
 
-        if ($erroCurlProc) {
-            $mensagens[] = "Erro ao processar OTIF: $erroCurlProc";
-        } else {
-            $jsonProc = json_decode($respostaProcessamento, true);
-
-            if ($jsonProc && isset($jsonProc['status']) && $jsonProc['status'] === 'processado') {
-                $mensagens[] = "Processamento: " . ($jsonProc['mensagem'] ?? 'Concluído.');
-                $processado  = true;
-            } else {
-                $mensagens[] = "Resposta inválida do processamento OTIF: " . htmlspecialchars($respostaProcessamento);
-            }
-        }
+        $mensagens[] = "Processamento iniciado. Você receberá o resultado por e‑mail.";
+        $processado  = true;
 
     } else {
         $mensagens[] = "Processamento OTIF não foi iniciado porque um ou ambos os arquivos apresentaram erro.";
@@ -289,7 +277,7 @@ button:hover {
 
 <?php if ($processado): ?>
 <div class="sucesso">
-    <p><strong>Processamento concluído!</strong></p>
+    <p><strong>Processamento iniciado!</strong></p>
     <p>O resultado será enviado para o e‑mail cadastrado.</p>
 </div>
 <a href="https://mupeconsult.com/" class="botao-voltar">Voltar ao site MUPE Consultoria</a>

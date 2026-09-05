@@ -1,16 +1,16 @@
 import os
+import base64
 from datetime import datetime, date
 import duckdb
 import pandas as pd
-import smtplib
-from email.message import EmailMessage
+import requests
 
 # ============================================================
-# Função de LOG (console + arquivo, modo append)
+# Função de LOG (console + arquivo)
 # ============================================================
 
 def log(msg):
-    print(msg)  # console do Railway
+    print(msg)
 
     log_path = os.path.join("uploads", "log.txt")
     try:
@@ -67,23 +67,17 @@ def validar_csv_faturamentos(caminho_faturamentos: str):
 
 
 # ============================================================
-# 2) Processamento OTIF — versão fiel ao MySQL + logs resumidos
+# 2) Processamento OTIF
 # ============================================================
 
 def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
     try:
-        # --------------------------------------------------------
-        # Separador de execução
-        # --------------------------------------------------------
         log("############################################################")
         log(f"# OTIF EXECUTADO EM {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         log("############################################################")
 
         log("Iniciando OTIF...")
 
-        # --------------------------------------------------------
-        # Leitura com DuckDB (mantido conforme solicitado)
-        # --------------------------------------------------------
         pedidos = duckdb.read_csv(
             caminho_pedidos,
             header=True,
@@ -103,15 +97,8 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         log(f"Pedidos lidos: {len(pedidos)} linhas")
         log(f"Faturamentos lidos: {len(fatur)} linhas")
 
-        # --------------------------------------------------------
-        # Renomeia colunas conforme MySQL
-        # --------------------------------------------------------
         pedidos.columns = ["ordem", "cliente", "dta_desejada", "sku", "qde_pedida"]
         fatur.columns   = ["dta_efetiva", "cliente", "sku", "qde_fatur", "numero_ordem"]
-
-        # ============================================================
-        # FASE 1 — equivalente ao sp1 (limpeza e conversão)
-        # ============================================================
 
         log("Convertendo quantidades...")
 
@@ -140,10 +127,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         )
         fatur["dta_efetiva_amer"] = fatur["dta_efetiva_amer"].fillna(data_padrao)
 
-        # ============================================================
-        # FASE 2 — equivalente ao sp2 (junção pedidos + faturamentos)
-        # ============================================================
-
         log("Executando resumo de faturamento...")
 
         resumo = fatur.groupby(["numero_ordem", "sku"]).agg(
@@ -170,10 +153,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         )
 
         log(f"Linhas após merge: {len(ped_fatur)}")
-
-        # ============================================================
-        # FASE 3 — equivalente ao sp3 (pontuações OTIF)
-        # ============================================================
 
         log("Calculando pontuações OTIF...")
 
@@ -204,10 +183,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             consol_fase2["linhas_atendidas"] / consol_fase2["total_linhas"] * 100
         )
 
-        # ============================================================
-        # FASE 4 — equivalente ao sp4 (backorder)
-        # ============================================================
-
         log("Calculando backorder...")
 
         fase3 = ped_fatur[ped_fatur["tot_fatur"] < ped_fatur["qde_pedida"]].copy()
@@ -223,10 +198,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             fase4["total_dias"] / fase4["total_ordens"]
             if fase4["total_ordens"][0] > 0 else 0
         )
-
-        # ============================================================
-        # FASE FINAL — gerar Excel
-        # ============================================================
 
         log("Gerando Excel...")
 
@@ -253,33 +224,48 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
 
 
 # ============================================================
-# 3) Envio de e-mail
+# 3) Envio de e-mail via RESEND
 # ============================================================
 
 def enviar_email_otif(arquivo_xlsx: str, email_destino: str):
-    smtp_host = "smtp.seuservidor.com"
-    smtp_port = 587
-    smtp_user = "usuario@seuservidor.com"
-    smtp_pass = "sua_senha"
+    log(f"Enviando e-mail OTIF para {email_destino} via Resend...")
 
-    msg = EmailMessage()
-    msg["Subject"] = "Relatório OTIF"
-    msg["From"] = smtp_user
-    msg["To"] = email_destino
-    msg.set_content("Segue em anexo o relatório OTIF gerado automaticamente.")
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    if not RESEND_API_KEY:
+        log("ERRO: RESEND_API_KEY não configurada no Railway.")
+        return False
 
     with open(arquivo_xlsx, "rb") as f:
-        dados = f.read()
-        msg.add_attachment(
-            dados,
-            maintype="application",
-            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=os.path.basename(arquivo_xlsx),
-        )
+        arquivo_bytes = f.read()
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+    arquivo_base64 = base64.b64encode(arquivo_bytes).decode("utf-8")
 
-    return True
+    payload = {
+        "from": "MUPE Consultoria <noreply@mupeconsult.com>",
+        "to": email_destino,
+        "subject": "Relatório OTIF",
+        "html": "<p>Segue em anexo o relatório OTIF gerado automaticamente.</p>",
+        "attachments": [
+            {
+                "filename": os.path.basename(arquivo_xlsx),
+                "content": arquivo_base64,
+                "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+        ]
+    }
+
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json=payload
+    )
+
+    if 200 <= response.status_code < 300:
+        log("E-mail enviado com sucesso via Resend.")
+        return True
+    else:
+        log(f"Erro ao enviar e-mail via Resend: {response.text}")
+        return False
