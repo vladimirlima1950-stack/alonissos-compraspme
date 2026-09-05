@@ -18,7 +18,8 @@ def validar_csv_pedidos(caminho_pedidos: str):
             caminho_pedidos,
             header=True,
             sep=";",
-            auto_detect=True
+            auto_detect=True,
+            all_varchar=True
         ).df()
     except Exception as e:
         return False, f"Erro ao ler pedidos: {e}"
