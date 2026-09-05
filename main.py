@@ -9,6 +9,29 @@ from modules.otif import (
     enviar_email_otif
 )
 
+def converter_para_utf8(caminho_arquivo):
+    try:
+        # Lê o arquivo em binário
+        with open(caminho_arquivo, "rb") as f:
+            conteudo = f.read()
+
+        # Tenta decodificar como UTF‑8
+        try:
+            texto = conteudo.decode("utf-8")
+        except UnicodeDecodeError:
+            # Se falhar, tenta Latin‑1
+            texto = conteudo.decode("latin-1")
+
+        # Regrava o arquivo em UTF‑8
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            f.write(texto)
+
+        return True, "Arquivo convertido para UTF‑8."
+
+    except Exception as e:
+        return False, f"Erro ao converter para UTF‑8: {str(e)}"
+
+
 app = FastAPI()
 
 UPLOAD_DIR = "uploads"
