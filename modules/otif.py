@@ -63,14 +63,16 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
             caminho_pedidos,
             header=True,
             sep=";",
-            auto_detect=True
+            auto_detect=True,
+            all_varchar=True
         ).df()
 
         fatur_raw = duckdb.read_csv(
             caminho_faturamentos,
             header=True,
             sep=";",
-            auto_detect=True
+            auto_detect=True,
+            all_varchar=True
         ).df()
 
         # --------------------------------------------------------
