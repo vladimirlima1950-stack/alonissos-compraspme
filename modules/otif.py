@@ -39,7 +39,8 @@ def validar_csv_faturamentos(caminho_faturamentos: str):
             caminho_faturamentos,
             header=True,
             sep=";",
-            auto_detect=True
+            auto_detect=True,
+            all_varchar=True
         ).df()
     except Exception as e:
         return False, f"Erro ao ler faturamentos: {e}"
@@ -82,13 +83,14 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         fatur_raw.columns   = ["data_fatur", "cliente", "sku", "qtd_faturada", "ordem_venda"]
 
         # --------------------------------------------------------
-        # Converte datas
+        # Converte datas de forma robusta
         # --------------------------------------------------------
         pedidos_raw["data_desejada"] = pd.to_datetime(
-            pedidos_raw["data_desejada"], format="%d/%m/%Y", errors="coerce"
+            pedidos_raw["data_desejada"], errors="coerce", dayfirst=True
         )
+
         fatur_raw["data_fatur"] = pd.to_datetime(
-            fatur_raw["data_fatur"], format="%d/%m/%Y", errors="coerce"
+            fatur_raw["data_fatur"], errors="coerce", dayfirst=True
         )
 
         # --------------------------------------------------------
@@ -104,16 +106,37 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
         )
 
         # --------------------------------------------------------
+        # Remove linhas com datas inválidas
+        # --------------------------------------------------------
+        ped_fatur = ped_fatur.dropna(subset=["data_fatur", "data_desejada"])
+
+        # --------------------------------------------------------
+        # Converte quantidades para número
+        # --------------------------------------------------------
+        ped_fatur["qtd_pedida"] = pd.to_numeric(
+            ped_fatur["qtd_pedida"], errors="coerce"
+        ).fillna(0)
+
+        ped_fatur["qtd_faturada"] = pd.to_numeric(
+            ped_fatur["qtd_faturada"], errors="coerce"
+        ).fillna(0)
+
+        # --------------------------------------------------------
         # Cálculo OTIF
         # --------------------------------------------------------
-        ped_fatur["atendido"] = ped_fatur["qtd_faturada"].fillna(0)
-        ped_fatur["otif_qtd"] = (ped_fatur["atendido"] >= ped_fatur["qtd_pedida"]).astype(int)
+        ped_fatur["atendido"] = ped_fatur["qtd_faturada"]
+
+        ped_fatur["otif_qtd"] = (
+            ped_fatur["atendido"] >= ped_fatur["qtd_pedida"]
+        ).astype(int)
+
         ped_fatur["otif_prazo"] = (
             ped_fatur["data_fatur"] <= ped_fatur["data_desejada"]
         ).astype(int)
 
         ped_fatur["otif_total"] = (
-            (ped_fatur["otif_qtd"] == 1) & (ped_fatur["otif_prazo"] == 1)
+            (ped_fatur["otif_qtd"] == 1) &
+            (ped_fatur["otif_prazo"] == 1)
         ).astype(int)
 
         # --------------------------------------------------------
@@ -151,7 +174,6 @@ def processar_otif(caminho_pedidos: str, caminho_faturamentos: str):
 # ============================================================
 
 def enviar_email_otif(arquivo_xlsx: str, email_destino: str):
-    # Ajuste conforme seu servidor SMTP real
     smtp_host = "smtp.seuservidor.com"
     smtp_port = 587
     smtp_user = "usuario@seuservidor.com"
