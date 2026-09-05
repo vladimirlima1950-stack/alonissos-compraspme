@@ -177,7 +177,9 @@ def enviar_email_otif(destinatario, consol, detalhes, arquivo_xlsx):
 
     texto += "Resumo Mensal:\n"
     for _, row in consol.iterrows():
-        texto += f"- {row['mes']:02d}/{row['ano']}: {row['nivel_servico']:.2f}%\n"
+        mes = int(row["mes"]) if pd.notna(row["mes"]) else 0
+        ano = int(row["ano"]) if pd.notna(row["ano"]) else 0
+        texto += f"- {mes:02d}/{ano}: {row['nivel_servico']:.2f}%\n"
 
     texto += "\nO arquivo Excel com o gráfico e consolidação está anexado.\n"
     texto += "\nAtenciosamente,\nMUPE Consultoria"
