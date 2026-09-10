@@ -580,7 +580,7 @@ def enviar_email_relatorio(pasta_relatorios, email_destino):
 # Execução direta do módulo
 # ============================================================
 
-def enviar_email_relatorio(pasta_relatorios, email_destino):
+
 
     ...
     return True
