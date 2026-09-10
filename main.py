@@ -154,6 +154,7 @@ def processar_compraspme_api(email: str):
 
 if __name__ == "__main__":
     import uvicorn
-    # Inicia o servidor escutando a porta dinâmica atribuída pelo Railway ou 8000 localmente
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    import os
+
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
