@@ -1,13 +1,3 @@
-"""
-aval_fornec.py
-Avaliação de desempenho de fornecedores (PME)
-Execução no Railway: gregarious-endurance-production-105a.up.railway.app
-
-IMPORTANTE:
-- Não alterar nomes de tabelas, campos ou lógica SQL.
-- Fluxo completo: sp0 → sp4 + exportação.
-"""
-
 import duckdb
 import os
 
@@ -24,7 +14,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 con = duckdb.connect("compras_pme.duckdb")
 
-
 # ============================================================
 # Função utilitária para executar SQL com log
 # ============================================================
@@ -32,7 +21,6 @@ con = duckdb.connect("compras_pme.duckdb")
 def run(sql):
     print("\nExecutando bloco SQL...")
     con.execute(sql)
-
 
 # ============================================================
 # SP0 – Criação das tabelas originais
@@ -83,7 +71,6 @@ def sp0_criar_tabelas():
         tempo_minutos DECIMAL(5,2)
     );
     """)
-
 
 # ============================================================
 # SP1 – Importação e limpeza de dados
@@ -189,7 +176,6 @@ def sp1_importar_e_limpar():
     GROUP BY codigo_fornecedor, codigo_produto;
     """)
 
-
 # ============================================================
 # SP2 – Classificação FLT/SLT
 # ============================================================
@@ -236,7 +222,6 @@ def sp2_classificacao():
             WHEN lead_time IS NULL THEN 'INDEF'
         END;
     """)
-
 
 # ============================================================
 # SP3 – Pontuações
@@ -323,7 +308,6 @@ def sp3_pontuacoes():
         END;
     """)
 
-    # ano_mes
     run("""
     ALTER TABLE tb_pedidos_entregas_resumo_fase2 ADD COLUMN ano_mes VARCHAR;
     """)
@@ -347,7 +331,6 @@ def sp3_pontuacoes():
     SET dta_qde_pontua = 1
     WHERE tipo_pedido = 'FLT' AND dta_pontua = 1 AND qde_pontua = 1;
     """)
-
 
 # ============================================================
 # SP4 – Relatórios
@@ -461,12 +444,12 @@ def sp4_relatorios():
     WHERE lead_time IS NULL;
     """)
 
-
 # ============================================================
 # Exportação
 # ============================================================
 
 def exportar_relatorios():
+
     def export_table(table_name):
         out_path = os.path.join(OUTPUT_DIR, f"{table_name}.csv")
         con.execute(f"COPY {table_name} TO '{out_path}' (FORMAT CSV, HEADER TRUE);")
@@ -483,7 +466,6 @@ def exportar_relatorios():
     for t in tabelas:
         export_table(t)
 
-
 # ============================================================
 # Execução principal
 # ============================================================
@@ -499,6 +481,28 @@ def main():
     con.close()
     print("\nProcessamento concluído com sucesso!")
 
+# ============================================================
+# FUNÇÕES FALTANTES — adicionadas para compatibilidade com main.py
+# ============================================================
 
-if __name__ == "__main__":
-    main()
+def validar_csv_pedidos(caminho):
+    import csv
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return False, "Arquivo de pedidos vazio."
+        return True, "OK"
+    except Exception as e:
+        return False, f"Erro ao validar pedidos: {str(e)}"
+
+
+def validar_csv_entregas(caminho):
+    import csv
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return False, "Arquivo
