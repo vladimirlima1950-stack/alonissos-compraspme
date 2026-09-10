@@ -5,6 +5,11 @@ import os
 app = FastAPI()
 
 
+@app.get("/")
+def raiz():
+    return {"status": "online"}
+
+
 from modules.aval_fornec import (
     validar_csv_pedidos,
     validar_csv_entregas,
