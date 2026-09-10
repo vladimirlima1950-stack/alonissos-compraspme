@@ -2,11 +2,12 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import os
 
-from modules.otif import (
-    processar_otif,
+from modules.aval_fornec import (
     validar_csv_pedidos,
-    validar_csv_faturamentos,
-    enviar_email_otif
+    validar_csv_entregas,
+    validar_csv_leadtime,
+    processar_compraspme,
+    enviar_email_relatorio
 )
 
 def converter_para_utf8(caminho_arquivo):
@@ -34,12 +35,13 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 pedidos_path = None
-faturamentos_path = None
+entregas_path = None
+leadtime_path = None
 
 
 @app.get("/")
 def home():
-    return {"status": "online", "mensagem": "API OTIF funcionando"}
+    return {"status": "online", "mensagem": "API ComprasPME funcionando"}
 
 
 @app.post("/upload_pedidos")
@@ -61,81 +63,94 @@ async def upload_pedidos(file: UploadFile = File(...)):
 
         ok_conv, msg_conv = converter_para_utf8(pedidos_path)
         if not ok_conv:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "erro", "mensagem": msg_conv}
-            )
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
 
         ok, msg = validar_csv_pedidos(pedidos_path)
         if not ok:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "erro", "mensagem": msg}
-            )
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
         return {"status": "ok", "arquivo": "pedidos.csv", "mensagem": "Arquivo de pedidos recebido e validado."}
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "erro", "mensagem": f"Falha ao receber pedidos: {str(e)}"}
-        )
+        return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 
-@app.post("/upload_faturamentos")
-async def upload_faturamentos(file: UploadFile = File(...)):
-    global faturamentos_path
+@app.post("/upload_entregas")
+async def upload_entregas(file: UploadFile = File(...)):
+    global entregas_path
 
     try:
-        faturamentos_path = os.path.join(UPLOAD_DIR, "faturamentos.csv")
+        entregas_path = os.path.join(UPLOAD_DIR, "entregas.csv")
 
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
                 status_code=400,
-                content={"status": "erro", "mensagem": "Arquivo de faturamentos está vazio ou muito pequeno."}
+                content={"status": "erro", "mensagem": "Arquivo de entregas está vazio ou muito pequeno."}
             )
 
-        with open(faturamentos_path, "wb") as f:
+        with open(entregas_path, "wb") as f:
             f.write(contents)
 
-        ok_conv, msg_conv = converter_para_utf8(faturamentos_path)
+        ok_conv, msg_conv = converter_para_utf8(entregas_path)
         if not ok_conv:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "erro", "mensagem": msg_conv}
-            )
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
 
-        ok, msg = validar_csv_faturamentos(faturamentos_path)
+        ok, msg = validar_csv_entregas(entregas_path)
         if not ok:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "erro", "mensagem": msg}
-            )
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
-        return {"status": "ok", "arquivo": "faturamentos.csv", "mensagem": "Arquivo de faturamentos recebido e validado."}
+        return {"status": "ok", "arquivo": "entregas.csv", "mensagem": "Arquivo de entregas recebido e validado."}
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "erro", "mensagem": f"Falha ao receber faturamentos: {str(e)}"}
-        )
+        return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 
-@app.get("/processar_otif")
-def processar_otif_api(email: str):
-    global pedidos_path, faturamentos_path
+@app.post("/upload_leadtime")
+async def upload_leadtime(file: UploadFile = File(...)):
+    global leadtime_path
 
-    if not pedidos_path or not faturamentos_path:
+    try:
+        leadtime_path = os.path.join(UPLOAD_DIR, "leadtime.csv")
+
+        contents = await file.read()
+        if len(contents) < 10:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "erro", "mensagem": "Arquivo de leadtime está vazio ou muito pequeno."}
+            )
+
+        with open(leadtime_path, "wb") as f:
+            f.write(contents)
+
+        ok_conv, msg_conv = converter_para_utf8(leadtime_path)
+        if not ok_conv:
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
+
+        ok, msg = validar_csv_leadtime(leadtime_path)
+        if not ok:
+            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
+
+        return {"status": "ok", "arquivo": "leadtime.csv", "mensagem": "Arquivo de leadtime recebido e validado."}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
+
+
+@app.get("/processar_compraspme")
+def processar_compraspme_api(email: str):
+    global pedidos_path, entregas_path, leadtime_path
+
+    if not pedidos_path or not entregas_path or not leadtime_path:
         return JSONResponse(
             status_code=400,
-            content={"status": "erro", "mensagem": "Envie pedidos e faturamentos antes de processar."}
+            content={"status": "erro", "mensagem": "Envie pedidos, entregas e leadtime antes de processar."}
         )
 
     try:
-        arquivo = processar_otif(pedidos_path, faturamentos_path)
+        arquivo = processar_compraspme(pedidos_path, entregas_path, leadtime_path)
 
-        enviar_email_otif(arquivo, email)
+        enviar_email_relatorio(arquivo, email)
 
         return {
             "status": "processado",
@@ -144,7 +159,4 @@ def processar_otif_api(email: str):
         }
 
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "erro", "mensagem": f"Falha ao processar OTIF: {str(e)}"}
-        )
+        return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
