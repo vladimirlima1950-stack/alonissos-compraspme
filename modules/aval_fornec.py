@@ -470,7 +470,9 @@ def exportar_relatorios():
 # ============================================================
 
 def main():
-    print("\nIniciando processamento...")
+    global con
+    con = duckdb.connect(":memory:")
+    print("\nIniciando processamento em memória...")
     sp0_criar_tabelas()
     sp1_importar_e_limpar()
     sp2_classificacao()
@@ -550,9 +552,12 @@ def enviar_email_relatorio(pasta_relatorios, email_destino):
     from email.message import EmailMessage
     import glob
 
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+
     msg = EmailMessage()
     msg["Subject"] = "Relatório ComprasPME"
-    msg["From"] = "relatorios@compraspme.com"
+    msg["From"] = smtp_user
     msg["To"] = email_destino
     msg.set_content("Segue relatório PME gerado automaticamente.")
 
@@ -570,9 +575,8 @@ def enviar_email_relatorio(pasta_relatorios, email_destino):
     # Envio via SMTP (Railway aceita SMTP externo)
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.starttls()
-        smtp.login("SEU_EMAIL", "SUA_SENHA")
+        smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
-
     return True
 
 

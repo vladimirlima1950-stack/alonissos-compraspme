@@ -1,15 +1,8 @@
+import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
-import os
 
-app = FastAPI()
-
-
-@app.get("/")
-def raiz():
-    return {"status": "online"}
-
-
+# Importação das funções do módulo de processamento
 from modules.aval_fornec import (
     validar_csv_pedidos,
     validar_csv_entregas,
@@ -18,54 +11,52 @@ from modules.aval_fornec import (
     enviar_email_relatorio
 )
 
-def converter_para_utf8(caminho_arquivo):
-    try:
-        with open(caminho_arquivo, "rb") as f:
-            conteudo = f.read()
+app = FastAPI(title="API ComprasPME")
 
-        try:
-            texto = conteudo.decode("utf-8")
-        except UnicodeDecodeError:
-            texto = conteudo.decode("latin-1")
-
-        with open(caminho_arquivo, "w", encoding="utf-8") as f:
-            f.write(texto)
-
-        return True, "Arquivo convertido para UTF‑8."
-
-    except Exception as e:
-        return False, f"Erro ao converter para UTF‑8: {str(e)}"
-
-
-app = FastAPI()
-
-UPLOAD_DIR = "uploads"
+# Diretório temporário seguro para upload no ambiente Railway/Linux
+UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Variáveis globais para rastrear o caminho dos arquivos enviados
 pedidos_path = None
 entregas_path = None
 leadtime_path = None
 
 
+def converter_para_utf8(caminho_arquivo: str):
+    """Lê o arquivo de entrada (tentando UTF-8 e Latin-1) e sobrescreve em UTF-8."""
+    try:
+        with open(caminho_arquivo, "rb") as f:
+            conteudo = f.read()
+        try:
+            texto = conteudo.decode("utf-8")
+        except UnicodeDecodeError:
+            texto = conteudo.decode("latin-1")
+        with open(caminho_arquivo, "w", encoding="utf-8") as f:
+            f.write(texto)
+        return True, "Arquivo convertido para UTF8."
+    except Exception as e:
+        return False, f"Erro ao converter para UTF8: {str(e)}"
+
+
 @app.get("/")
 def home():
+    """Rota de verificação de status da API."""
     return {"status": "online", "mensagem": "API ComprasPME funcionando"}
 
 
 @app.post("/upload_pedidos")
 async def upload_pedidos(file: UploadFile = File(...)):
+    """Upload e validação do arquivo de pedidos."""
     global pedidos_path
-
     try:
         pedidos_path = os.path.join(UPLOAD_DIR, "pedidos.csv")
-
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
                 status_code=400,
-                content={"status": "erro", "mensagem": "Arquivo de pedidos está vazio ou muito pequeno."}
+                content={"status": "erro", "mensagem": "Arquivo de pedidos vazio ou muito pequeno."}
             )
-
         with open(pedidos_path, "wb") as f:
             f.write(contents)
 
@@ -78,25 +69,22 @@ async def upload_pedidos(file: UploadFile = File(...)):
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
         return {"status": "ok", "arquivo": "pedidos.csv", "mensagem": "Arquivo de pedidos recebido e validado."}
-
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 
 @app.post("/upload_entregas")
 async def upload_entregas(file: UploadFile = File(...)):
+    """Upload e validação do arquivo de entregas."""
     global entregas_path
-
     try:
         entregas_path = os.path.join(UPLOAD_DIR, "entregas.csv")
-
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
                 status_code=400,
-                content={"status": "erro", "mensagem": "Arquivo de entregas está vazio ou muito pequeno."}
+                content={"status": "erro", "mensagem": "Arquivo de entregas vazio ou muito pequeno."}
             )
-
         with open(entregas_path, "wb") as f:
             f.write(contents)
 
@@ -109,25 +97,22 @@ async def upload_entregas(file: UploadFile = File(...)):
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
         return {"status": "ok", "arquivo": "entregas.csv", "mensagem": "Arquivo de entregas recebido e validado."}
-
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 
 @app.post("/upload_leadtime")
 async def upload_leadtime(file: UploadFile = File(...)):
+    """Upload e validação do arquivo de leadtime."""
     global leadtime_path
-
     try:
         leadtime_path = os.path.join(UPLOAD_DIR, "leadtime.csv")
-
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
                 status_code=400,
-                content={"status": "erro", "mensagem": "Arquivo de leadtime está vazio ou muito pequeno."}
+                content={"status": "erro", "mensagem": "Arquivo de leadtime vazio ou muito pequeno."}
             )
-
         with open(leadtime_path, "wb") as f:
             f.write(contents)
 
@@ -140,13 +125,13 @@ async def upload_leadtime(file: UploadFile = File(...)):
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
         return {"status": "ok", "arquivo": "leadtime.csv", "mensagem": "Arquivo de leadtime recebido e validado."}
-
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 
 @app.get("/processar_compraspme")
 def processar_compraspme_api(email: str):
+    """Executa o pipeline no DuckDB e envia os relatórios por e-mail."""
     global pedidos_path, entregas_path, leadtime_path
 
     if not pedidos_path or not entregas_path or not leadtime_path:
@@ -156,15 +141,19 @@ def processar_compraspme_api(email: str):
         )
 
     try:
-        arquivo = processar_compraspme(pedidos_path, entregas_path, leadtime_path)
-
-        enviar_email_relatorio(arquivo, email)
-
+        pasta_saida = processar_compraspme(pedidos_path, entregas_path, leadtime_path)
+        enviar_email_relatorio(pasta_saida, email)
         return {
             "status": "processado",
             "mensagem": "Processamento concluído e enviado por e-mail.",
-            "arquivo_xlsx": str(arquivo)
+            "diretorio_saida": str(pasta_saida)
         }
-
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
+
+
+if __name__ == "__main__":
+    import uvicorn
+    # Inicia o servidor escutando a porta dinâmica atribuída pelo Railway ou 8000 localmente
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
