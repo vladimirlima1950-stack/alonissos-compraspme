@@ -133,3 +133,12 @@ def processar_compraspme_api(email: str):
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
+    
+
+if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000))
+    )
