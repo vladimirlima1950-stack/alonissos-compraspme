@@ -2,6 +2,9 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import os
 
+app = FastAPI()
+
+
 from modules.aval_fornec import (
     validar_csv_pedidos,
     validar_csv_entregas,
