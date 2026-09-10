@@ -580,5 +580,6 @@ def enviar_email_relatorio(pasta_relatorios, email_destino):
 # Execução direta do módulo
 # ============================================================
 
-if __name__ == "__main__":
-    main()
+def enviar_email_relatorio(...):
+    ...
+    return True
