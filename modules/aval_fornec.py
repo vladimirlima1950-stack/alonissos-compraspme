@@ -402,4 +402,4 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
             log("E-mail enviado com sucesso.")
             return True
         else:
-            log(f"Erro ao enviar
+            log(f"Erro ao enviar e-mail via Resend API: {e}")
