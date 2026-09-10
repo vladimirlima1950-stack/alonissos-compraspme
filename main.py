@@ -13,15 +13,14 @@ from modules.aval_fornec import (
 
 app = FastAPI(title="API ComprasPME")
 
-# Diretório temporário seguro para upload no ambiente Railway/Linux
-UPLOAD_DIR = "/tmp/uploads"
+# Diretório de uploads (declarado no topo, igual ao OTIF)
+UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Variáveis globais para rastrear o caminho dos arquivos enviados
 pedidos_path = None
 entregas_path = None
 leadtime_path = None
-
 
 def converter_para_utf8(caminho_arquivo: str):
     """Lê o arquivo de entrada (tentando UTF-8 e Latin-1) e sobrescreve em UTF-8."""
@@ -38,12 +37,10 @@ def converter_para_utf8(caminho_arquivo: str):
     except Exception as e:
         return False, f"Erro ao converter para UTF8: {str(e)}"
 
-
 @app.get("/")
 def home():
     """Rota de verificação de status da API."""
     return {"status": "online", "mensagem": "API ComprasPME funcionando"}
-
 
 @app.post("/upload_pedidos")
 async def upload_pedidos(file: UploadFile = File(...)):
@@ -59,19 +56,15 @@ async def upload_pedidos(file: UploadFile = File(...)):
             )
         with open(pedidos_path, "wb") as f:
             f.write(contents)
-
         ok_conv, msg_conv = converter_para_utf8(pedidos_path)
         if not ok_conv:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
-
         ok, msg = validar_csv_pedidos(pedidos_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
-
         return {"status": "ok", "arquivo": "pedidos.csv", "mensagem": "Arquivo de pedidos recebido e validado."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
-
 
 @app.post("/upload_entregas")
 async def upload_entregas(file: UploadFile = File(...)):
@@ -87,19 +80,15 @@ async def upload_entregas(file: UploadFile = File(...)):
             )
         with open(entregas_path, "wb") as f:
             f.write(contents)
-
         ok_conv, msg_conv = converter_para_utf8(entregas_path)
         if not ok_conv:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
-
         ok, msg = validar_csv_entregas(entregas_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
-
         return {"status": "ok", "arquivo": "entregas.csv", "mensagem": "Arquivo de entregas recebido e validado."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
-
 
 @app.post("/upload_leadtime")
 async def upload_leadtime(file: UploadFile = File(...)):
@@ -115,31 +104,25 @@ async def upload_leadtime(file: UploadFile = File(...)):
             )
         with open(leadtime_path, "wb") as f:
             f.write(contents)
-
         ok_conv, msg_conv = converter_para_utf8(leadtime_path)
         if not ok_conv:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
-
         ok, msg = validar_csv_leadtime(leadtime_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
-
         return {"status": "ok", "arquivo": "leadtime.csv", "mensagem": "Arquivo de leadtime recebido e validado."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
-
 
 @app.get("/processar_compraspme")
 def processar_compraspme_api(email: str):
     """Executa o pipeline no DuckDB e envia os relatórios por e-mail."""
     global pedidos_path, entregas_path, leadtime_path
-
     if not pedidos_path or not entregas_path or not leadtime_path:
         return JSONResponse(
             status_code=400,
             content={"status": "erro", "mensagem": "Envie pedidos, entregas e leadtime antes de processar."}
         )
-
     try:
         pasta_saida = processar_compraspme(pedidos_path, entregas_path, leadtime_path)
         enviar_email_relatorio(pasta_saida, email)
@@ -150,11 +133,3 @@ def processar_compraspme_api(email: str):
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
-
-
-if __name__ == "__main__":
-    import uvicorn
-    import os
-
-    port = int(os.getenv("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
