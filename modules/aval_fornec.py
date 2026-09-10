@@ -12,6 +12,7 @@ ARQ_LEADTIME = "compras_leadtime.csv"
 OUTPUT_DIR = "output_relatorios"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Banco DuckDB
 con = duckdb.connect("compras_pme.duckdb")
 
 # ============================================================
@@ -175,7 +176,6 @@ def sp1_importar_e_limpar():
     FROM tb_leadtime_orig
     GROUP BY codigo_fornecedor, codigo_produto;
     """)
-
 # ============================================================
 # SP2 – Classificação FLT/SLT
 # ============================================================
@@ -331,7 +331,6 @@ def sp3_pontuacoes():
     SET dta_qde_pontua = 1
     WHERE tipo_pedido = 'FLT' AND dta_pontua = 1 AND qde_pontua = 1;
     """)
-
 # ============================================================
 # SP4 – Relatórios
 # ============================================================
@@ -445,7 +444,7 @@ def sp4_relatorios():
     """)
 
 # ============================================================
-# Exportação
+# Exportação dos relatórios
 # ============================================================
 
 def exportar_relatorios():
@@ -480,9 +479,8 @@ def main():
     exportar_relatorios()
     con.close()
     print("\nProcessamento concluído com sucesso!")
-
 # ============================================================
-# FUNÇÕES FALTANTES — adicionadas para compatibilidade com main.py
+# Funções de validação dos CSVs
 # ============================================================
 
 def validar_csv_pedidos(caminho):
@@ -505,4 +503,82 @@ def validar_csv_entregas(caminho):
             reader = csv.reader(f)
             header = next(reader, None)
             if header is None:
-                return False, "Arquivo
+                return False, "Arquivo de entregas vazio."
+        return True, "OK"
+    except Exception as e:
+        return False, f"Erro ao validar entregas: {str(e)}"
+
+
+def validar_csv_leadtime(caminho):
+    import csv
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return False, "Arquivo de leadtime vazio."
+        return True, "OK"
+    except Exception as e:
+        return False, f"Erro ao validar leadtime: {str(e)}"
+
+
+# ============================================================
+# Função que dispara o processamento PME
+# ============================================================
+
+def processar_compraspme(pedidos, entregas, leadtime):
+    global ARQ_PEDIDOS, ARQ_ENTREGAS, ARQ_LEADTIME
+
+    # Ajusta nomes dos arquivos para o pipeline PME
+    ARQ_PEDIDOS = pedidos
+    ARQ_ENTREGAS = entregas
+    ARQ_LEADTIME = leadtime
+
+    # Executa o pipeline completo
+    main()
+
+    # Retorna o diretório onde os relatórios foram gerados
+    return OUTPUT_DIR
+
+
+# ============================================================
+# Envio de e-mail com os relatórios
+# ============================================================
+
+def enviar_email_relatorio(pasta_relatorios, email_destino):
+    import smtplib
+    from email.message import EmailMessage
+    import glob
+
+    msg = EmailMessage()
+    msg["Subject"] = "Relatório ComprasPME"
+    msg["From"] = "relatorios@compraspme.com"
+    msg["To"] = email_destino
+    msg.set_content("Segue relatório PME gerado automaticamente.")
+
+    # Anexa todos os CSVs exportados
+    arquivos = glob.glob(os.path.join(pasta_relatorios, "*.csv"))
+    for arq in arquivos:
+        with open(arq, "rb") as f:
+            msg.add_attachment(
+                f.read(),
+                maintype="application",
+                subtype="octet-stream",
+                filename=os.path.basename(arq)
+            )
+
+    # Envio via SMTP (Railway aceita SMTP externo)
+    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        smtp.starttls()
+        smtp.login("SEU_EMAIL", "SUA_SENHA")
+        smtp.send_message(msg)
+
+    return True
+
+
+# ============================================================
+# Execução direta do módulo
+# ============================================================
+
+if __name__ == "__main__":
+    main()
