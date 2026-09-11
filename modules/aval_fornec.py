@@ -35,7 +35,10 @@ def validar_csv_pedidos(caminho_pedidos: str):
         return False, "Arquivo de pedidos não encontrado."
     try:
         df = duckdb.read_csv(
-            caminho_pedidos, header=True, auto_detect=True, all_varchar=True
+            caminho_pedidos, 
+            header=True, 
+            sep="\t",   # ← seu arquivo usa TAB
+            auto_detect=True, all_varchar=True
         ).df()
         if df.empty:
             return False, "Arquivo de pedidos está vazio."
@@ -91,7 +94,6 @@ def validar_csv_leadtime(caminho_leadtime: str):
 # Etapas do Pipeline SQL / DuckDB
 # ============================================================
 
-
 def sp0_criar_tabelas(con):
     con.execute("""
         DROP TABLE IF EXISTS tb_pedidos_orig;
@@ -100,99 +102,155 @@ def sp0_criar_tabelas(con):
 
         CREATE TABLE tb_pedidos_orig (
             codigo_pedido VARCHAR,
-            dta_pedido VARCHAR,
+            dta_pedido DATE,
             codigo_produto VARCHAR,
             codigo_fornecedor VARCHAR,
-            dta_desejada VARCHAR,
-            qde_desejada VARCHAR
+            dta_desejada DATE,
+            qde_desejada DECIMAL(10,2)
         );
 
         CREATE TABLE tb_entregas_orig (
             codigo_pedido VARCHAR,
             codigo_produto VARCHAR,
             codigo_fornecedor VARCHAR,
-            qde_entregue VARCHAR,
-            dta_nota_fiscal VARCHAR
+            qde_entregue DECIMAL(10,2),
+            dta_nota_fiscal DATE
         );
 
         CREATE TABLE tb_leadtime_orig (
             codigo_fornecedor VARCHAR,
             codigo_produto VARCHAR,
-            leadtime_dias VARCHAR
+            leadtime_dias DECIMAL(10,2)
         );
     """)
 
-
 def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
-    con.execute(
-        f"INSERT INTO tb_pedidos_orig SELECT * FROM read_csv('{arq_pedidos}', header=True, all_varchar=True);"
-    )
-    con.execute(
-        f"INSERT INTO tb_entregas_orig SELECT * FROM read_csv('{arq_entregas}', header=True, all_varchar=True);"
-    )
-    con.execute(
-        f"INSERT INTO tb_leadtime_orig SELECT * FROM read_csv('{arq_leadtime}', header=True, all_varchar=True);"
+    # Pedidos
+    df_ped = pd.read_csv(arq_pedidos, sep=";", dtype=str)
+    df_ped.columns = [
+        "codigo_pedido",
+        "dta_pedido",
+        "codigo_produto",
+        "codigo_fornecedor",
+        "dta_desejada",
+        "qde_desejada",
+    ]
+
+    df_ped["qde_desejada"] = (
+        df_ped["qde_desejada"]
+        .str.replace(",", ".", regex=False)
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
     )
 
-    con.execute(
-        "UPDATE tb_pedidos_orig SET qde_desejada = replace(qde_desejada, ',', '.');"
-    )
-    con.execute(
-        "ALTER TABLE tb_pedidos_orig ALTER COLUMN qde_desejada TYPE DECIMAL(10,2) USING CAST(qde_desejada AS DECIMAL(10,2));"
-    )
-    con.execute(
-        "UPDATE tb_pedidos_orig SET dta_pedido = try_strptime(dta_pedido, '%d/%m/%Y'), dta_desejada = try_strptime(dta_desejada, '%d/%m/%Y');"
+    df_ped["dta_pedido"] = pd.to_datetime(df_ped["dta_pedido"], errors="coerce", dayfirst=True)
+    df_ped["dta_desejada"] = pd.to_datetime(df_ped["dta_desejada"], errors="coerce", dayfirst=True)
+
+    con.execute("DELETE FROM tb_pedidos_orig")
+    con.register("df_pedidos_tmp", df_ped)
+    con.execute("""
+        INSERT INTO tb_pedidos_orig
+        SELECT codigo_pedido,
+               dta_pedido,
+               codigo_produto,
+               codigo_fornecedor,
+               dta_desejada,
+               qde_desejada
+        FROM df_pedidos_tmp;
+    """)
+
+    # Entregas
+    df_ent = pd.read_csv(arq_entregas, sep=";", dtype=str)
+    df_ent.columns = [
+        "codigo_pedido",
+        "codigo_produto",
+        "codigo_fornecedor",
+        "qde_entregue",
+        "dta_nota_fiscal",
+    ]
+
+    df_ent["qde_entregue"] = (
+        df_ent["qde_entregue"]
+        .str.replace(",", ".", regex=False)
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
     )
 
-    con.execute(
-        "UPDATE tb_entregas_orig SET qde_entregue = replace(qde_entregue, ',', '.');"
-    )
-    con.execute(
-        "ALTER TABLE tb_entregas_orig ALTER COLUMN qde_entregue TYPE DECIMAL(10,2) USING CAST(qde_entregue AS DECIMAL(10,2));"
-    )
-    con.execute(
-        "UPDATE tb_entregas_orig SET dta_nota_fiscal = try_strptime(dta_nota_fiscal, '%d/%m/%Y');"
+    df_ent["dta_nota_fiscal"] = pd.to_datetime(df_ent["dta_nota_fiscal"], errors="coerce", dayfirst=True)
+
+    con.execute("DELETE FROM tb_entregas_orig")
+    con.register("df_entregas_tmp", df_ent)
+    con.execute("""
+        INSERT INTO tb_entregas_orig
+        SELECT codigo_pedido,
+               codigo_produto,
+               codigo_fornecedor,
+               qde_entregue,
+               dta_nota_fiscal
+        FROM df_entregas_tmp;
+    """)
+
+    # Leadtime
+    df_lead = pd.read_csv(arq_leadtime, sep=";", dtype=str)
+    df_lead.columns = [
+        "codigo_fornecedor",
+        "codigo_produto",
+        "leadtime_dias",
+    ]
+
+    df_lead["leadtime_dias"] = (
+        df_lead["leadtime_dias"]
+        .str.replace(",", ".", regex=False)
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
     )
 
-    con.execute(
-        "UPDATE tb_leadtime_orig SET leadtime_dias = replace(leadtime_dias, ',', '.');"
-    )
-    con.execute(
-        "ALTER TABLE tb_leadtime_orig ALTER COLUMN leadtime_dias TYPE DECIMAL(10,2) USING CAST(leadtime_dias AS DECIMAL(10,2));"
-    )
-
+    con.execute("DELETE FROM tb_leadtime_orig")
+    con.register("df_leadtime_tmp", df_lead)
+    con.execute("""
+        INSERT INTO tb_leadtime_orig
+        SELECT codigo_fornecedor,
+               codigo_produto,
+               leadtime_dias
+        FROM df_leadtime_tmp;
+    """)
 
 def sp2_classificacao(con):
     con.execute("""
         DROP TABLE IF EXISTS tb_pedidos_entregas;
 
         CREATE TABLE tb_pedidos_entregas AS
-        SELECT p.codigo_pedido, p.dta_pedido, p.codigo_produto, p.codigo_fornecedor,
-               p.dta_desejada, p.qde_desejada, e.qde_entregue, e.dta_nota_fiscal
+        SELECT
+            p.codigo_pedido,
+            p.dta_pedido,
+            p.codigo_produto,
+            p.codigo_fornecedor,
+            p.dta_desejada,
+            p.qde_desejada,
+            e.qde_entregue,
+            e.dta_nota_fiscal
         FROM tb_pedidos_orig p
         LEFT JOIN tb_entregas_orig e
-        ON p.codigo_pedido = e.codigo_pedido
-        AND p.codigo_fornecedor = e.codigo_fornecedor
-        AND p.codigo_produto = e.codigo_produto;
+          ON p.codigo_pedido = e.codigo_pedido
+         AND p.codigo_fornecedor = e.codigo_fornecedor
+         AND p.codigo_produto = e.codigo_produto;
 
         ALTER TABLE tb_pedidos_entregas ADD COLUMN tipo_pedido VARCHAR;
         ALTER TABLE tb_pedidos_entregas ADD COLUMN lead_time INTEGER;
 
-        -- CORRIGIDO: alterado de tb_leadtime_resumo para tb_leadtime_orig
         UPDATE tb_pedidos_entregas
         SET lead_time = CAST(l.leadtime_dias AS INTEGER)
         FROM tb_leadtime_orig l
         WHERE tb_pedidos_entregas.codigo_fornecedor = l.codigo_fornecedor
-        AND tb_pedidos_entregas.codigo_produto = l.codigo_produto;
+          AND tb_pedidos_entregas.codigo_produto = l.codigo_produto;
 
         UPDATE tb_pedidos_entregas
         SET tipo_pedido = CASE
-            WHEN datediff('day', CAST(dta_pedido AS DATE), CAST(dta_desejada AS DATE)) >= lead_time THEN 'FLT'
-            WHEN datediff('day', CAST(dta_pedido AS DATE), CAST(dta_desejada AS DATE)) < lead_time THEN 'SLT'
+            WHEN datediff('day', dta_pedido, dta_desejada) >= lead_time THEN 'FLT'
+            WHEN datediff('day', dta_pedido, dta_desejada) < lead_time THEN 'SLT'
             WHEN lead_time IS NULL THEN 'INDEF'
         END;
     """)
-
 
 def sp3_pontuacoes(con):
     con.execute("""
@@ -202,49 +260,54 @@ def sp3_pontuacoes(con):
         DROP TABLE IF EXISTS tb_pedidos_entregas_resumo_fase2;
 
         CREATE TABLE tb_pedidos_entregas_resumo_fase2 AS
-        SELECT codigo_pedido, codigo_produto, codigo_fornecedor,
-               max(dta_desejada) AS dta_desejada,
-               max(lead_time) AS lead_time,
-               max(tipo_pedido) AS tipo_pedido,
-               max(qde_desejada) AS qde_desejada,
-               sum(qde_entregue) AS qde_entregue,
-               max(dta_nota_fiscal) AS dta_nota_fiscal,
-               max(dta_pontua) AS dta_pontua,
-               sum(qde_pontua) AS qde_pontua
+        SELECT
+            codigo_pedido,
+            codigo_produto,
+            codigo_fornecedor,
+            max(dta_desejada) AS dta_desejada,
+            max(lead_time) AS lead_time,
+            max(tipo_pedido) AS tipo_pedido,
+            max(qde_desejada) AS qde_desejada,
+            sum(COALESCE(qde_entregue, 0)) AS qde_entregue,
+            max(dta_nota_fiscal) AS dta_nota_fiscal,
+            max(dta_pontua) AS dta_pontua,
+            sum(COALESCE(qde_pontua, 0)) AS qde_pontua
         FROM tb_pedidos_entregas
         GROUP BY codigo_pedido, codigo_produto, codigo_fornecedor;
 
         UPDATE tb_pedidos_entregas_resumo_fase2
-        SET dta_pontua = CASE WHEN dta_nota_fiscal <= dta_desejada THEN 1 ELSE 0 END;
+        SET dta_pontua = CASE
+            WHEN dta_nota_fiscal <= dta_desejada THEN 1 ELSE 0 END;
 
         UPDATE tb_pedidos_entregas_resumo_fase2
-        SET qde_pontua = CASE WHEN qde_entregue >= qde_desejada THEN 1 ELSE 0 END;
+        SET qde_pontua = CASE
+            WHEN qde_entregue >= qde_desejada THEN 1 ELSE 0 END;
 
         ALTER TABLE tb_pedidos_entregas_resumo_fase2 ADD COLUMN ano_mes VARCHAR;
 
         UPDATE tb_pedidos_entregas_resumo_fase2
-        SET ano_mes = strftime(CAST(dta_desejada AS DATE), '%Y-%m');
+        SET ano_mes = strftime(dta_desejada, '%Y-%m');
 
         ALTER TABLE tb_pedidos_entregas_resumo_fase2 ADD COLUMN dta_qde_pontua DECIMAL(5,2);
 
         UPDATE tb_pedidos_entregas_resumo_fase2
         SET dta_qde_pontua = 1
         WHERE tipo_pedido = 'FLT'
-        AND dta_pontua = 1
-        AND qde_pontua = 1;
+          AND dta_pontua = 1
+          AND qde_pontua = 1;
     """)
-
 
 def sp4_relatorios(con):
     con.execute("""
         DROP TABLE IF EXISTS tb_desempenho_global_fornecedor;
 
-        -- CORRIGIDO: removido ano_mes do GROUP BY/ORDER BY para ser uma visao global real
         CREATE TABLE tb_desempenho_global_fornecedor AS
-        SELECT codigo_fornecedor,
-               count(tipo_pedido) AS qtde_linhas_pedidas,
-               sum(dta_qde_pontua) AS qtde_linhas_atendidas,
-               (sum(dta_qde_pontua) * 100.0 / NULLIF(count(tipo_pedido),0)) AS desempenho_fornecedor
+        SELECT
+            codigo_fornecedor,
+            count(tipo_pedido) AS qtde_linhas_pedidas,
+            sum(COALESCE(dta_qde_pontua, 0)) AS qtde_linhas_atendidas,
+            (sum(COALESCE(dta_qde_pontua, 0)) * 100.0
+             / NULLIF(count(tipo_pedido), 0)) AS desempenho_fornecedor
         FROM tb_pedidos_entregas_resumo_fase2
         WHERE lower(tipo_pedido) = 'flt'
         GROUP BY codigo_fornecedor
@@ -253,10 +316,13 @@ def sp4_relatorios(con):
         DROP TABLE IF EXISTS tb_desempenho_mes_a_mes_fornecedor;
 
         CREATE TABLE tb_desempenho_mes_a_mes_fornecedor AS
-        SELECT codigo_fornecedor, ano_mes,
-               count(tipo_pedido) AS qtde_linhas_pedidas,
-               sum(dta_qde_pontua) AS qtde_linhas_atendidas,
-               (sum(dta_qde_pontua) * 100.0 / NULLIF(count(tipo_pedido),0)) AS desempenho_fornecedor
+        SELECT
+            codigo_fornecedor,
+            ano_mes,
+            count(tipo_pedido) AS qtde_linhas_pedidas,
+            sum(COALESCE(dta_qde_pontua, 0)) AS qtde_linhas_atendidas,
+            (sum(COALESCE(dta_qde_pontua, 0)) * 100.0
+             / NULLIF(count(tipo_pedido), 0)) AS desempenho_fornecedor
         FROM tb_pedidos_entregas_resumo_fase2
         WHERE lower(tipo_pedido) = 'flt'
         GROUP BY codigo_fornecedor, ano_mes
@@ -265,21 +331,26 @@ def sp4_relatorios(con):
         DROP TABLE IF EXISTS tb_desempenho_mes_a_mes_planejamento;
 
         CREATE TABLE tb_desempenho_mes_a_mes_planejamento AS
-        SELECT codigo_pedido, codigo_fornecedor, tipo_pedido,
-               CASE WHEN tipo_pedido = 'FLT' THEN 1 ELSE 0 END AS pedido_FLT,
-               CASE WHEN tipo_pedido = 'SLT' THEN 1 ELSE 0 END AS pedido_SLT,
-               ano_mes
+        SELECT
+            codigo_pedido,
+            codigo_fornecedor,
+            tipo_pedido,
+            CASE WHEN tipo_pedido = 'FLT' THEN 1 ELSE 0 END AS pedido_FLT,
+            CASE WHEN tipo_pedido = 'SLT' THEN 1 ELSE 0 END AS pedido_SLT,
+            ano_mes
         FROM tb_pedidos_entregas_resumo_fase2;
 
         DROP TABLE IF EXISTS tb_desempenho_mes_a_mes_planejamento_resumo;
 
         CREATE TABLE tb_desempenho_mes_a_mes_planejamento_resumo AS
-        SELECT codigo_fornecedor,
-               sum(pedido_FLT) AS pedido_FLT,
-               sum(pedido_SLT) AS pedido_SLT,
-               ano_mes,
-               (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
-               (sum(pedido_FLT) * 100.0 / NULLIF(sum(pedido_FLT) + sum(pedido_SLT),0)) AS efetividade_planejamento
+        SELECT
+            codigo_fornecedor,
+            sum(pedido_FLT) AS pedido_FLT,
+            sum(pedido_SLT) AS pedido_SLT,
+            ano_mes,
+            (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
+            (sum(pedido_FLT) * 100.0
+             / NULLIF(sum(pedido_FLT) + sum(pedido_SLT), 0)) AS efetividade_planejamento
         FROM tb_desempenho_mes_a_mes_planejamento
         GROUP BY codigo_fornecedor, ano_mes
         ORDER BY codigo_fornecedor, ano_mes;
@@ -287,11 +358,13 @@ def sp4_relatorios(con):
         DROP TABLE IF EXISTS tb_desempenho_global_planejamento_resumo;
 
         CREATE TABLE tb_desempenho_global_planejamento_resumo AS
-        SELECT codigo_fornecedor,
-               sum(pedido_FLT) AS pedido_FLT,
-               sum(pedido_SLT) AS pedido_SLT,
-               (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
-               (sum(pedido_FLT) * 100.0 / NULLIF(sum(pedido_FLT) + sum(pedido_SLT),0)) AS efetividade_planejamento
+        SELECT
+            codigo_fornecedor,
+            sum(pedido_FLT) AS pedido_FLT,
+            sum(pedido_SLT) AS pedido_SLT,
+            (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
+            (sum(pedido_FLT) * 100.0
+             / NULLIF(sum(pedido_FLT) + sum(pedido_SLT), 0)) AS efetividade_planejamento
         FROM tb_desempenho_mes_a_mes_planejamento
         GROUP BY codigo_fornecedor
         ORDER BY codigo_fornecedor;
@@ -299,7 +372,10 @@ def sp4_relatorios(con):
         DROP TABLE IF EXISTS tb_leadtime_faltante;
 
         CREATE TABLE tb_leadtime_faltante AS
-        SELECT codigo_produto, codigo_fornecedor, lead_time
+        SELECT
+            codigo_produto,
+            codigo_fornecedor,
+            lead_time
         FROM tb_pedidos_entregas_resumo_fase2
         WHERE lead_time IS NULL;
     """)
@@ -309,13 +385,14 @@ def sp4_relatorios(con):
 # Exportação Excel (.xlsx)
 # ============================================================
 
-
 def exportar_relatorios(con):
+    # Caminho do arquivo final
     arquivo_xlsx = os.path.join(
         OUTPUT_DIR,
-        f"COMPRAS_PME_AVAL_FORNEC_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        f"COMPRAS_PME_AVAL_FORNEC_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
 
+    # Mapeamento das abas → tabelas SQL
     tabelas = {
         "Desempenho_Global_Forn": "tb_desempenho_global_fornecedor",
         "Desempenho_Mes_Forn": "tb_desempenho_mes_a_mes_fornecedor",
@@ -324,10 +401,38 @@ def exportar_relatorios(con):
         "Leadtime_Faltante": "tb_leadtime_faltante",
     }
 
-    with pd.ExcelWriter(arquivo_xlsx, engine="openpyxl") as writer:
+    # Criar Excel com engine mais estável
+    with pd.ExcelWriter(arquivo_xlsx, engine="xlsxwriter") as writer:
+
         for aba, tabela in tabelas.items():
-            df = con.execute(f"SELECT * FROM {tabela}").df()
-            df.to_excel(writer, sheet_name=aba, index=False)
+            try:
+                # Verifica se a tabela existe no DuckDB
+                existe = con.execute(
+                    f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{tabela}'"
+                ).fetchone()[0]
+
+                if existe == 0:
+                    # Cria aba vazia com aviso
+                    df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} não existe."]})
+                    df_vazio.to_excel(writer, sheet_name=aba, index=False)
+                    continue
+
+                # Carrega a tabela
+                df = con.execute(f"SELECT * FROM {tabela}").df()
+
+                # Se estiver vazia, cria aba com aviso
+                if df.empty:
+                    df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} está vazia."]})
+                    df_vazio.to_excel(writer, sheet_name=aba, index=False)
+                    continue
+
+                # Exporta normalmente
+                df.to_excel(writer, sheet_name=aba, index=False)
+
+            except Exception as e:
+                # Aba com erro
+                df_erro = pd.DataFrame({"Erro": [f"Falha ao exportar {tabela}: {e}"]})
+                df_erro.to_excel(writer, sheet_name=f"{aba}_ERRO", index=False)
 
     log(f"Arquivo Excel unificado gerado: {arquivo_xlsx}")
     return arquivo_xlsx
