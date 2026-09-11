@@ -50,7 +50,7 @@ def validar_csv_pedidos(caminho_pedidos: str):
         if df.empty:
             return False, "Arquivo de pedidos está vazio."
             
-        if df.shape[1] < 6:
+        if df.shape[1] != 6:
             return (
                 False,
                 f"Arquivo de pedidos precisa ter 6 colunas (recebido: {df.shape[1]}). Verifique se o separador é vírgula, ponto e vírgula ou TAB.",
