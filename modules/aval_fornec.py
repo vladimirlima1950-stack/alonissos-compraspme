@@ -6,6 +6,11 @@ import duckdb
 import pandas as pd
 import requests
 
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+
+app = FastAPI()
+
 # ============================================================
 # Configurações gerais e Diretórios
 # ============================================================
@@ -34,18 +39,21 @@ def validar_csv_pedidos(caminho_pedidos: str):
     if not os.path.exists(caminho_pedidos):
         return False, "Arquivo de pedidos não encontrado."
     try:
+        # Removido sep="\t" para permitir que o DuckDB auto-detecte (vírgula, ponto e vírgula ou TAB)
         df = duckdb.read_csv(
             caminho_pedidos, 
             header=True, 
-            sep="\t",   # ← seu arquivo usa TAB
-            auto_detect=True, all_varchar=True
+            auto_detect=True, 
+            all_varchar=True
         ).df()
+        
         if df.empty:
             return False, "Arquivo de pedidos está vazio."
+            
         if df.shape[1] < 6:
             return (
                 False,
-                "Arquivo de pedidos tem menos colunas do que o esperado.",
+                f"Arquivo de pedidos precisa ter 6 colunas (recebido: {df.shape[1]}). Verifique se o separador é vírgula, ponto e vírgula ou TAB.",
             )
     except Exception as e:
         return False, f"Erro ao ler pedidos: {e}"
@@ -57,14 +65,19 @@ def validar_csv_entregas(caminho_entregas: str):
         return False, "Arquivo de entregas não encontrado."
     try:
         df = duckdb.read_csv(
-            caminho_entregas, header=True, auto_detect=True, all_varchar=True
+            caminho_entregas, 
+            header=True, 
+            auto_detect=True, 
+            all_varchar=True
         ).df()
+        
         if df.empty:
             return False, "Arquivo de entregas está vazio."
+            
         if df.shape[1] < 5:
             return (
                 False,
-                "Arquivo de entregas tem menos colunas do que o esperado.",
+                f"Arquivo de entregas precisa ter 5 colunas (recebido: {df.shape[1]}).",
             )
     except Exception as e:
         return False, f"Erro ao ler entregas: {e}"
@@ -76,27 +89,33 @@ def validar_csv_leadtime(caminho_leadtime: str):
         return False, "Arquivo de leadtime não encontrado."
     try:
         df = duckdb.read_csv(
-            caminho_leadtime, header=True, auto_detect=True, all_varchar=True
+            caminho_leadtime, 
+            header=True, 
+            auto_detect=True, 
+            all_varchar=True
         ).df()
+        
         if df.empty:
             return False, "Arquivo de leadtime está vazio."
+            
         if df.shape[1] < 3:
             return (
                 False,
-                "Arquivo de leadtime tem menos colunas do que o esperado.",
+                f"Arquivo de leadtime precisa ter 3 colunas (recebido: {df.shape[1]}).",
             )
     except Exception as e:
         return False, f"Erro ao ler leadtime: {e}"
     return True, "Arquivo de leadtime validado com sucesso."
 
-from fastapi import UploadFile, File
-from fastapi.responses import JSONResponse
+# ============================================================
+# Endpoints HTTP (FastAPI)
+# ============================================================
 
 pedidos_path = None
 entregas_path = None
 leadtime_path = None
 
-
+@app.post("/upload_pedidos")
 async def upload_pedidos(file: UploadFile = File(...)):
     global pedidos_path
     pedidos_path = f"uploads/{file.filename}"
@@ -110,7 +129,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
     return {"status": "ok", "mensagem": "Pedidos recebidos e validados."}
 
 
-
+@app.post("/upload_entregas")
 async def upload_entregas(file: UploadFile = File(...)):
     global entregas_path
     entregas_path = f"uploads/{file.filename}"
@@ -124,7 +143,7 @@ async def upload_entregas(file: UploadFile = File(...)):
     return {"status": "ok", "mensagem": "Entregas recebidas e validadas."}
 
 
-
+@app.post("/upload_leadtime")
 async def upload_leadtime(file: UploadFile = File(...)):
     global leadtime_path
     leadtime_path = f"uploads/{file.filename}"
@@ -136,8 +155,6 @@ async def upload_leadtime(file: UploadFile = File(...)):
         return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
     return {"status": "ok", "mensagem": "Leadtime recebido e validado."}
-
-
 
 
 # ============================================================
