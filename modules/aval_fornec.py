@@ -96,7 +96,7 @@ pedidos_path = None
 entregas_path = None
 leadtime_path = None
 
-@app.post("/pedidos")
+
 async def upload_pedidos(file: UploadFile = File(...)):
     global pedidos_path
     pedidos_path = f"uploads/{file.filename}"
@@ -110,7 +110,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
     return {"status": "ok", "mensagem": "Pedidos recebidos e validados."}
 
 
-@app.post("/entregas")
+
 async def upload_entregas(file: UploadFile = File(...)):
     global entregas_path
     entregas_path = f"uploads/{file.filename}"
@@ -124,7 +124,7 @@ async def upload_entregas(file: UploadFile = File(...)):
     return {"status": "ok", "mensagem": "Entregas recebidas e validadas."}
 
 
-@app.post("/leadtime")
+
 async def upload_leadtime(file: UploadFile = File(...)):
     global leadtime_path
     leadtime_path = f"uploads/{file.filename}"
