@@ -89,6 +89,56 @@ def validar_csv_leadtime(caminho_leadtime: str):
         return False, f"Erro ao ler leadtime: {e}"
     return True, "Arquivo de leadtime validado com sucesso."
 
+from fastapi import UploadFile, File
+from fastapi.responses import JSONResponse
+
+pedidos_path = None
+entregas_path = None
+leadtime_path = None
+
+@app.post("/pedidos")
+async def upload_pedidos(file: UploadFile = File(...)):
+    global pedidos_path
+    pedidos_path = f"uploads/{file.filename}"
+    with open(pedidos_path, "wb") as f:
+        f.write(await file.read())
+
+    ok, msg = validar_csv_pedidos(pedidos_path)
+    if not ok:
+        return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
+
+    return {"status": "ok", "mensagem": "Pedidos recebidos e validados."}
+
+
+@app.post("/entregas")
+async def upload_entregas(file: UploadFile = File(...)):
+    global entregas_path
+    entregas_path = f"uploads/{file.filename}"
+    with open(entregas_path, "wb") as f:
+        f.write(await file.read())
+
+    ok, msg = validar_csv_entregas(entregas_path)
+    if not ok:
+        return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
+
+    return {"status": "ok", "mensagem": "Entregas recebidas e validadas."}
+
+
+@app.post("/leadtime")
+async def upload_leadtime(file: UploadFile = File(...)):
+    global leadtime_path
+    leadtime_path = f"uploads/{file.filename}"
+    with open(leadtime_path, "wb") as f:
+        f.write(await file.read())
+
+    ok, msg = validar_csv_leadtime(leadtime_path)
+    if not ok:
+        return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
+
+    return {"status": "ok", "mensagem": "Leadtime recebido e validado."}
+
+
+
 
 # ============================================================
 # Etapas do Pipeline SQL / DuckDB
