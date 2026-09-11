@@ -1,3 +1,4 @@
+# Atualização de versão Compras PME - 6 colunas
 import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
