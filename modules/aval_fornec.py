@@ -18,10 +18,10 @@ app = FastAPI()
 OUTPUT_DIR = os.path.join("uploads", "output_relatorios")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
 def log(msg):
     log_line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
     print(log_line)
+
     log_path = os.path.join("uploads", "log.txt")
     try:
         with open(log_path, "a", encoding="utf-8") as f:
@@ -29,82 +29,88 @@ def log(msg):
     except Exception as e:
         print(f"Falha ao escrever log: {e}")
 
-
 # ============================================================
 # Validações dos CSVs
 # ============================================================
 
-
 def validar_csv_pedidos(caminho_pedidos: str):
     if not os.path.exists(caminho_pedidos):
         return False, "Arquivo de pedidos não encontrado."
+
     try:
-        # Removido sep="\t" para permitir que o DuckDB auto-detecte (vírgula, ponto e vírgula ou TAB)
         df = duckdb.read_csv(
-            caminho_pedidos, 
-            header=True, 
-            auto_detect=True, 
+            caminho_pedidos,
+            header=True,
+            auto_detect=True,
             all_varchar=True
         ).df()
-        
+
         if df.empty:
             return False, "Arquivo de pedidos está vazio."
-            
+
         if df.shape[1] != 6:
             return (
                 False,
-                f"Arquivo de pedidos precisa ter 6 colunas (recebido: {df.shape[1]}). Verifique se o separador é vírgula, ponto e vírgula ou TAB.",
+                f"Arquivo de pedidos precisa ter 6 colunas (recebido: {df.shape[1]})."
             )
+
     except Exception as e:
         return False, f"Erro ao ler pedidos: {e}"
+
     return True, "Arquivo de pedidos validado com sucesso."
 
 
 def validar_csv_entregas(caminho_entregas: str):
     if not os.path.exists(caminho_entregas):
         return False, "Arquivo de entregas não encontrado."
+
     try:
         df = duckdb.read_csv(
-            caminho_entregas, 
-            header=True, 
-            auto_detect=True, 
+            caminho_entregas,
+            header=True,
+            auto_detect=True,
             all_varchar=True
         ).df()
-        
+
         if df.empty:
             return False, "Arquivo de entregas está vazio."
-            
+
         if df.shape[1] < 5:
             return (
                 False,
-                f"Arquivo de entregas precisa ter 5 colunas (recebido: {df.shape[1]}).",
+                f"Arquivo de entregas precisa ter 5 colunas (recebido: {df.shape[1]})."
             )
+
     except Exception as e:
         return False, f"Erro ao ler entregas: {e}"
+
     return True, "Arquivo de entregas validado com sucesso."
 
 
 def validar_csv_leadtime(caminho_leadtime: str):
     if not os.path.exists(caminho_leadtime):
         return False, "Arquivo de leadtime não encontrado."
+
     try:
         df = duckdb.read_csv(
-            caminho_leadtime, 
-            header=True, 
-            auto_detect=True, 
+            caminho_leadtime,
+            header=True,
+            auto_detect=True,
             all_varchar=True
         ).df()
-        
+
         if df.empty:
             return False, "Arquivo de leadtime está vazio."
-            
+
         if df.shape[1] < 3:
             return (
                 False,
-                f"Arquivo de leadtime precisa ter 3 colunas (recebido: {df.shape[1]}).",
+                f"Arquivo de leadtime precisa ter 3 colunas (recebido: {df.shape[1]})."
             )
+
     except Exception as e:
         return False, f"Erro ao ler leadtime: {e}"
+
     return True, "Arquivo de leadtime validado com sucesso."
 
 # ============================================================
@@ -119,6 +125,7 @@ leadtime_path = None
 async def upload_pedidos(file: UploadFile = File(...)):
     global pedidos_path
     pedidos_path = f"uploads/{file.filename}"
+
     with open(pedidos_path, "wb") as f:
         f.write(await file.read())
 
@@ -133,6 +140,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
 async def upload_entregas(file: UploadFile = File(...)):
     global entregas_path
     entregas_path = f"uploads/{file.filename}"
+
     with open(entregas_path, "wb") as f:
         f.write(await file.read())
 
@@ -147,6 +155,7 @@ async def upload_entregas(file: UploadFile = File(...)):
 async def upload_leadtime(file: UploadFile = File(...)):
     global leadtime_path
     leadtime_path = f"uploads/{file.filename}"
+
     with open(leadtime_path, "wb") as f:
         f.write(await file.read())
 
@@ -155,7 +164,6 @@ async def upload_leadtime(file: UploadFile = File(...)):
         return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
 
     return {"status": "ok", "mensagem": "Leadtime recebido e validado."}
-
 
 # ============================================================
 # Etapas do Pipeline SQL / DuckDB
@@ -192,6 +200,7 @@ def sp0_criar_tabelas(con):
     """)
 
 def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
+
     # Pedidos
     df_ped = pd.read_csv(arq_pedidos, sep=";", dtype=str)
     df_ped.columns = [
@@ -215,14 +224,11 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
 
     con.execute("DELETE FROM tb_pedidos_orig")
     con.register("df_pedidos_tmp", df_ped)
+
     con.execute("""
         INSERT INTO tb_pedidos_orig
-        SELECT codigo_pedido,
-               dta_pedido,
-               codigo_produto,
-               codigo_fornecedor,
-               dta_desejada,
-               qde_desejada
+        SELECT codigo_pedido, dta_pedido, codigo_produto, codigo_fornecedor,
+               dta_desejada, qde_desejada
         FROM df_pedidos_tmp;
     """)
 
@@ -247,13 +253,11 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
 
     con.execute("DELETE FROM tb_entregas_orig")
     con.register("df_entregas_tmp", df_ent)
+
     con.execute("""
         INSERT INTO tb_entregas_orig
-        SELECT codigo_pedido,
-               codigo_produto,
-               codigo_fornecedor,
-               qde_entregue,
-               dta_nota_fiscal
+        SELECT codigo_pedido, codigo_produto, codigo_fornecedor,
+               qde_entregue, dta_nota_fiscal
         FROM df_entregas_tmp;
     """)
 
@@ -274,11 +278,10 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
 
     con.execute("DELETE FROM tb_leadtime_orig")
     con.register("df_leadtime_tmp", df_lead)
+
     con.execute("""
         INSERT INTO tb_leadtime_orig
-        SELECT codigo_fornecedor,
-               codigo_produto,
-               leadtime_dias
+        SELECT codigo_fornecedor, codigo_produto, leadtime_dias
         FROM df_leadtime_tmp;
     """)
 
@@ -298,9 +301,9 @@ def sp2_classificacao(con):
             e.dta_nota_fiscal
         FROM tb_pedidos_orig p
         LEFT JOIN tb_entregas_orig e
-          ON p.codigo_pedido = e.codigo_pedido
-         AND p.codigo_fornecedor = e.codigo_fornecedor
-         AND p.codigo_produto = e.codigo_produto;
+        ON p.codigo_pedido = e.codigo_pedido
+        AND p.codigo_fornecedor = e.codigo_fornecedor
+        AND p.codigo_produto = e.codigo_produto;
 
         ALTER TABLE tb_pedidos_entregas ADD COLUMN tipo_pedido VARCHAR;
         ALTER TABLE tb_pedidos_entregas ADD COLUMN lead_time INTEGER;
@@ -309,7 +312,7 @@ def sp2_classificacao(con):
         SET lead_time = CAST(l.leadtime_dias AS INTEGER)
         FROM tb_leadtime_orig l
         WHERE tb_pedidos_entregas.codigo_fornecedor = l.codigo_fornecedor
-          AND tb_pedidos_entregas.codigo_produto = l.codigo_produto;
+        AND tb_pedidos_entregas.codigo_produto = l.codigo_produto;
 
         UPDATE tb_pedidos_entregas
         SET tipo_pedido = CASE
@@ -360,8 +363,8 @@ def sp3_pontuacoes(con):
         UPDATE tb_pedidos_entregas_resumo_fase2
         SET dta_qde_pontua = 1
         WHERE tipo_pedido = 'FLT'
-          AND dta_pontua = 1
-          AND qde_pontua = 1;
+        AND dta_pontua = 1
+        AND qde_pontua = 1;
     """)
 
 def sp4_relatorios(con):
@@ -447,19 +450,18 @@ def sp4_relatorios(con):
         WHERE lead_time IS NULL;
     """)
 
-
 # ============================================================
 # Exportação Excel (.xlsx)
 # ============================================================
 
+
+
 def exportar_relatorios(con):
-    # Caminho do arquivo final
     arquivo_xlsx = os.path.join(
         OUTPUT_DIR,
         f"COMPRAS_PME_AVAL_FORNEC_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
 
-    # Mapeamento das abas → tabelas SQL
     tabelas = {
         "Desempenho_Global_Forn": "tb_desempenho_global_fornecedor",
         "Desempenho_Mes_Forn": "tb_desempenho_mes_a_mes_fornecedor",
@@ -468,36 +470,28 @@ def exportar_relatorios(con):
         "Leadtime_Faltante": "tb_leadtime_faltante",
     }
 
-    # Criar Excel com engine mais estável
     with pd.ExcelWriter(arquivo_xlsx, engine="xlsxwriter") as writer:
-
         for aba, tabela in tabelas.items():
             try:
-                # Verifica se a tabela existe no DuckDB
                 existe = con.execute(
                     f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{tabela}'"
                 ).fetchone()[0]
 
                 if existe == 0:
-                    # Cria aba vazia com aviso
                     df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} não existe."]})
                     df_vazio.to_excel(writer, sheet_name=aba, index=False)
                     continue
 
-                # Carrega a tabela
                 df = con.execute(f"SELECT * FROM {tabela}").df()
 
-                # Se estiver vazia, cria aba com aviso
                 if df.empty:
                     df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} está vazia."]})
                     df_vazio.to_excel(writer, sheet_name=aba, index=False)
                     continue
 
-                # Exporta normalmente
                 df.to_excel(writer, sheet_name=aba, index=False)
 
             except Exception as e:
-                # Aba com erro
                 df_erro = pd.DataFrame({"Erro": [f"Falha ao exportar {tabela}: {e}"]})
                 df_erro.to_excel(writer, sheet_name=f"{aba}_ERRO", index=False)
 
@@ -509,13 +503,10 @@ def exportar_relatorios(con):
 # Função principal do pipeline
 # ============================================================
 
-
 def processar_compraspme(pedidos: str, entregas: str, leadtime: str):
     try:
         log("############################################################")
-        log(
-            f"# COMPRAS PME EXECUTADO EM {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
+        log(f"# COMPRAS PME EXECUTADO EM {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         log("############################################################")
 
         con = duckdb.connect(":memory:")
@@ -553,8 +544,7 @@ def processar_compraspme(pedidos: str, entregas: str, leadtime: str):
 # Envio de e-mail via Resend API
 # ============================================================
 
-
-def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
+def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: str):
     log(f"Enviando relatório PME para {email_destino} via Resend...")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -562,7 +552,6 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
         log("ERRO: RESEND_API_KEY não configurada.")
         return False
 
-    # CORRIGIDO: bloco try/except recuado para dentro da função
     try:
         with open(arquivo_xlsx, "rb") as f:
             arquivo_bytes = f.read()
@@ -572,7 +561,15 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
             "from": "MUPE Consultoria <noreply@mupeconsult.com>",
             "to": email_destino,
             "subject": "Relatório Avaliação de Fornecedores - ComprasPME",
-            "html": "<p>Olá,</p><p>Segue o relatório consolidado.</p>",
+            "html": f"""
+                <p>Olá, {nome_cliente}.</p>
+
+                <p>Segue planilha com informações diversas sobre o desempenho de entrega dos seus fornecedores.</p>
+
+                <p>Caso haja alguma dúvida ou sugestão, por favor, entre em contato.</p>
+
+                <p>MUPE Consultoria</p>
+            """,
             "attachments": [
                 {
                     "filename": os.path.basename(arquivo_xlsx),
@@ -596,9 +593,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
             log("E-mail enviado com sucesso.")
             return True
         else:
-            log(
-                f"Erro ao enviar e-mail via Resend API: {response.status_code} - {response.text}"
-            )
+            log(f"Erro ao enviar e-mail via Resend API: {response.status_code} - {response.text}")
             return False
 
     except Exception as e:
