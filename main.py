@@ -116,7 +116,7 @@ async def upload_leadtime(file: UploadFile = File(...)):
         return JSONResponse(status_code=500, content={"status": "erro", "mensagem": str(e)})
 
 @app.get("/processar_compraspme")
-def processar_compraspme_api(email: str):
+def processar_compraspme_api(email: str, nome: str = "cliente"):
     """Executa o pipeline no DuckDB e envia os relatórios por e-mail."""
     global pedidos_path, entregas_path, leadtime_path
     if not pedidos_path or not entregas_path or not leadtime_path:
@@ -126,7 +126,7 @@ def processar_compraspme_api(email: str):
         )
     try:
         pasta_saida = processar_compraspme(pedidos_path, entregas_path, leadtime_path)
-        enviar_email_relatorio(pasta_saida, email)
+        enviar_email_relatorio(pasta_saida, email, nome)
         return {
             "status": "processado",
             "mensagem": "Processamento concluído e enviado por e-mail.",

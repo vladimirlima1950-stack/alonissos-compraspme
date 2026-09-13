@@ -554,7 +554,7 @@ def processar_compraspme(pedidos: str, entregas: str, leadtime: str):
 # ============================================================
 
 
-def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
+def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: str):
     log(f"Enviando relatório PME para {email_destino} via Resend...")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -576,7 +576,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
              "to": email_destino,
             "subject": "Relatório Avaliação de Fornecedores - ComprasPME",
             "html": (
-    f"<p>Olá, {email_destino}.</p>"
+    f"<p>Olá, {nome_cliente}.</p>"
     "<p>Os seus arquivos foram processados com sucesso e estamos anexando nesta mensagem a planilha resultante.</p>"
     "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco.</p>"
     "</p>Será um prazer ajudar.</p>"
