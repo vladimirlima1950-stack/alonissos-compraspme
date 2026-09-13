@@ -116,7 +116,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($okPedidos && $okEntregas && $okLeadtime) {
 
-        $urlProcessar = rtrim($railway_base, '/') . "/processar_compraspme?email=" . urlencode($emailCliente);
+        $urlProcessar = rtrim($railway_base, '/') 
+    . "/processar_compraspme?email=" . urlencode($emailCliente)
+    . "&nome=" . urlencode($nomeClienteTela);
+
 
         $curl = curl_init();
         curl_setopt_array($curl, [

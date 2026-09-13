@@ -468,38 +468,48 @@ def exportar_relatorios(con):
         "Leadtime_Faltante": "tb_leadtime_faltante",
     }
 
-    # Criar Excel com engine mais estável
+    # criar Excel com engine mais estável
     with pd.ExcelWriter(arquivo_xlsx, engine="xlsxwriter") as writer:
+        workbook = writer.book
+        percent_fmt = workbook.add_format({'num_format': '0.00%'})
 
         for aba, tabela in tabelas.items():
             try:
-                # Verifica se a tabela existe no DuckDB
                 existe = con.execute(
                     f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{tabela}'"
                 ).fetchone()[0]
 
                 if existe == 0:
-                    # Cria aba vazia com aviso
                     df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} não existe."]})
                     df_vazio.to_excel(writer, sheet_name=aba, index=False)
                     continue
 
-                # Carrega a tabela
                 df = con.execute(f"SELECT * FROM {tabela}").df()
 
-                # Se estiver vazia, cria aba com aviso
                 if df.empty:
                     df_vazio = pd.DataFrame({"Aviso": [f"Tabela {tabela} está vazia."]})
                     df_vazio.to_excel(writer, sheet_name=aba, index=False)
                     continue
 
-                # Exporta normalmente
                 df.to_excel(writer, sheet_name=aba, index=False)
 
+                # === APLICA FORMATAÇÃO DE PERCENTUAL ===
+                worksheet = writer.sheets[aba]
+
+                # Colunas que devem ser formatadas como percentual
+                colunas_percentuais = [
+                    "desempenho_fornecedor",
+                    "efetividade_planejamento"
+            ]
+
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name.lower() in colunas_percentuais:
+                        worksheet.set_column(col_idx, col_idx, 12, percent_fmt)
+
             except Exception as e:
-                # Aba com erro
                 df_erro = pd.DataFrame({"Erro": [f"Falha ao exportar {tabela}: {e}"]})
                 df_erro.to_excel(writer, sheet_name=f"{aba}_ERRO", index=False)
+
 
     log(f"Arquivo Excel unificado gerado: {arquivo_xlsx}")
     return arquivo_xlsx
