@@ -373,7 +373,7 @@ def sp4_relatorios(con):
             codigo_fornecedor,
             count(tipo_pedido) AS qtde_linhas_pedidas,
             sum(COALESCE(dta_qde_pontua, 0)) AS qtde_linhas_atendidas,
-            (sum(COALESCE(dta_qde_pontua, 0)) * 100.0
+            (sum(COALESCE(dta_qde_pontua, 0)) * 1.0
              / NULLIF(count(tipo_pedido), 0)) AS desempenho_fornecedor
         FROM tb_pedidos_entregas_resumo_fase2
         WHERE lower(tipo_pedido) = 'flt'
@@ -388,7 +388,7 @@ def sp4_relatorios(con):
             ano_mes,
             count(tipo_pedido) AS qtde_linhas_pedidas,
             sum(COALESCE(dta_qde_pontua, 0)) AS qtde_linhas_atendidas,
-            (sum(COALESCE(dta_qde_pontua, 0)) * 100.0
+            (sum(COALESCE(dta_qde_pontua, 0)) * 1.0
              / NULLIF(count(tipo_pedido), 0)) AS desempenho_fornecedor
         FROM tb_pedidos_entregas_resumo_fase2
         WHERE lower(tipo_pedido) = 'flt'
