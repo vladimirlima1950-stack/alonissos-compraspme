@@ -558,6 +558,9 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
     log(f"Enviando relatório PME para {email_destino} via Resend...")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    print("RESEND_API_KEY no módulo:", RESEND_API_KEY)
+    
+
     if not RESEND_API_KEY:
         log("ERRO: RESEND_API_KEY não configurada.")
         return False
@@ -570,9 +573,16 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
 
         payload = {
             "from": "MUPE Consultoria <noreply@mupeconsult.com>",
-            "to": email_destino,
+             "to": email_destino,
             "subject": "Relatório Avaliação de Fornecedores - ComprasPME",
-            "html": "<p>Olá,</p><p>Segue o relatório consolidado.</p>",
+            "html": (
+    f"<p>Olá, {email_destino}.</p>"
+    "<p>Os seus arquivos foram processados com sucesso e estamos anexando nesta mensagem a planilha resultante.</p>"
+    "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco. Será um prazer ajudar.</p>"
+    "<p>Atenciosamente,<br>"
+    "<strong>MUPE Consultoria</strong><br>"
+    
+),
             "attachments": [
                 {
                     "filename": os.path.basename(arquivo_xlsx),
@@ -605,4 +615,4 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
         log(f"Erro ao enviar e-mail via Resend API: {e}")
         return False
     
-    print("RESEND_API_KEY no módulo:", RESEND_API_KEY)
+   
