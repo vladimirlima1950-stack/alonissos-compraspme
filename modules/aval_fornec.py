@@ -416,7 +416,7 @@ def sp4_relatorios(con):
             sum(pedido_SLT) AS pedido_SLT,
             ano_mes,
             (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
-            (sum(pedido_FLT) * 100.0
+            (sum(pedido_FLT) * 1.0
              / NULLIF(sum(pedido_FLT) + sum(pedido_SLT), 0)) AS efetividade_planejamento
         FROM tb_desempenho_mes_a_mes_planejamento
         GROUP BY codigo_fornecedor, ano_mes
@@ -430,7 +430,7 @@ def sp4_relatorios(con):
             sum(pedido_FLT) AS pedido_FLT,
             sum(pedido_SLT) AS pedido_SLT,
             (sum(pedido_FLT) + sum(pedido_SLT)) AS pedidos_colocados_total,
-            (sum(pedido_FLT) * 100.0
+            (sum(pedido_FLT) * 1.0
              / NULLIF(sum(pedido_FLT) + sum(pedido_SLT), 0)) AS efetividade_planejamento
         FROM tb_desempenho_mes_a_mes_planejamento
         GROUP BY codigo_fornecedor
