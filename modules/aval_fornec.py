@@ -578,7 +578,8 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
             "html": (
     f"<p>Olá, {email_destino}.</p>"
     "<p>Os seus arquivos foram processados com sucesso e estamos anexando nesta mensagem a planilha resultante.</p>"
-    "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco. Será um prazer ajudar.</p>"
+    "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco.</p>"
+    "</p>Será um prazer ajudar.</p>"
     "<p>Atenciosamente,<br>"
     "<strong>MUPE Consultoria</strong><br>"
     "</p>"
