@@ -581,7 +581,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str):
     "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco. Será um prazer ajudar.</p>"
     "<p>Atenciosamente,<br>"
     "<strong>MUPE Consultoria</strong><br>"
-    
+    "</p>"
 ),
             "attachments": [
                 {
