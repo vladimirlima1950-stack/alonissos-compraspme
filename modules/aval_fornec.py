@@ -311,20 +311,6 @@ def sp2_classificacao(con):
         WHERE tb_pedidos_entregas.codigo_fornecedor = l.codigo_fornecedor
           AND tb_pedidos_entregas.codigo_produto = l.codigo_produto;
 
-          DROP TABLE IF EXISTS tb_leadtime_faltante;
-          CREATE TABLE tb_leadtime_faltante AS
-          SELECT DISTINCT
-            codigo_produto,
-            codigo_fornecedor,
-            leadtime_dias
-          FROM tb_leadtime_orig
-          WHERE lead_time IS NULL;
-
-          UPDATE tb_pedidos_entregas
-          SET leadtime_dias = 30
-          WHERE leadtime_dias IS NULL
-            OR leadtime_dias = 0;
-
         UPDATE tb_pedidos_entregas
         SET tipo_pedido = CASE
             WHEN datediff('day', dta_pedido, dta_desejada) >= lead_time THEN 'FLT'
@@ -450,9 +436,15 @@ def sp4_relatorios(con):
         GROUP BY codigo_fornecedor
         ORDER BY codigo_fornecedor;
 
-        
+        DROP TABLE IF EXISTS tb_leadtime_faltante;
 
-        
+        CREATE TABLE tb_leadtime_faltante AS
+        SELECT
+            codigo_produto,
+            codigo_fornecedor,
+            lead_time
+        FROM tb_pedidos_entregas_resumo_fase2
+        WHERE lead_time IS NULL;
     """)
 
 
