@@ -166,6 +166,7 @@ def sp0_criar_tabelas(con):
         DROP TABLE IF EXISTS tb_pedidos_orig;
         DROP TABLE IF EXISTS tb_entregas_orig;
         DROP TABLE IF EXISTS tb_leadtime_orig;
+        DROP TABLE IF EXISTS tb_leadtime_faltante;
 
         CREATE TABLE tb_pedidos_orig (
             codigo_pedido VARCHAR,
@@ -189,6 +190,13 @@ def sp0_criar_tabelas(con):
             codigo_produto VARCHAR,
             leadtime_dias DECIMAL(10,2)
         );
+        
+        CREATE TABLE tb_leadtime_faltante (
+        codigo_fornecedor VARCHAR,
+        codigo_produto VARCHAR,
+        leadtime_dias DECIMAL(10,2)
+            );
+        
     """)
 
 def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
@@ -280,6 +288,15 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
                codigo_produto,
                leadtime_dias
         FROM df_leadtime_tmp;
+        
+        INSERT INTO tb_leadtime_faltante 
+        SELECT codigo_fornecedor,
+               codigo_produto,
+               leadtime_dias
+        FROM df_leadtime_tmp
+        WHERE leadtime_dias IS NULL 
+            OR leadtime_dias = 0;
+        
     """)
 
 def sp2_classificacao(con):
@@ -436,15 +453,7 @@ def sp4_relatorios(con):
         GROUP BY codigo_fornecedor
         ORDER BY codigo_fornecedor;
 
-        DROP TABLE IF EXISTS tb_leadtime_faltante;
 
-        CREATE TABLE tb_leadtime_faltante AS
-        SELECT
-            codigo_produto,
-            codigo_fornecedor,
-            lead_time
-        FROM tb_pedidos_entregas_resumo_fase2
-        WHERE lead_time IS NULL;
     """)
 
 
