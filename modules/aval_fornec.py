@@ -317,7 +317,7 @@ def sp2_classificacao(con):
             codigo_produto,
             codigo_fornecedor,
             lead_time
-          FROM tb_pedidos_entregas
+          FROM tb_leadtime_orig
           WHERE lead_time IS NULL;
 
           UPDATE tb_pedidos_entregas
