@@ -316,7 +316,7 @@ def sp2_classificacao(con):
           SELECT DISTINCT
             codigo_produto,
             codigo_fornecedor,
-            lead_time
+            leadtime_dias
           FROM tb_leadtime_orig
           WHERE lead_time IS NULL;
 
