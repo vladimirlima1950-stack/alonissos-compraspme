@@ -321,9 +321,9 @@ def sp2_classificacao(con):
           WHERE lead_time IS NULL;
 
           UPDATE tb_pedidos_entregas
-          SET lead_time = 30
-          WHERE lead_time IS NULL
-            OR lead_time = 0;
+          SET leadtime_dias = 30
+          WHERE leadtime_dias IS NULL
+            OR leadtime_dias = 0;
 
         UPDATE tb_pedidos_entregas
         SET tipo_pedido = CASE
