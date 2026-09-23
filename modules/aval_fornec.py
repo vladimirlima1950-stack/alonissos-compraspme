@@ -593,16 +593,52 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
         payload = {
             "from": "MUPE Consultoria <noreply@mupeconsult.com>",
              "to": email_destino,
-            "subject": "Relatório Avaliação de Fornecedores - ComprasPME",
-            "html": (
-    f"<p>Olá, {nome_cliente}.</p>"
-    "<p>Os seus arquivos foram processados com sucesso e estamos anexando nesta mensagem a planilha resultante.</p>"
-    "<p>Caso haja qualquer dúvida, sugestão ou dificuldade, por favor entre em contato conosco.</p>"
-    "</p>Será um prazer ajudar.</p>"
-    "<p>Atenciosamente,<br>"
-    "<strong>MUPE Consultoria</strong><br>"
-    "</p>"
-),
+            "subject": "Relatório Avaliação de Fornecedores",
+            "html": f"""
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            Olá, {nome_cliente}!
+            </p>
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            O módulo <strong>Avaliação da Cadeia de Suprimentos</strong> foi processado com sucesso.
+            </p>
+            
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            As planilhas anexas permitem avaliar o desempenho dos fornecedores e a eficiência do processo de planejamento de compras.
+            </p>
+
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            A análise de desempenho dos fornecedores mostra o percentual de entregas realizadas dentro do prazo acordado, tanto mês a mês quanto para todo o período analisado.
+            Essas informações ajudam a identificar fornecedores confiáveis e aqueles que podem estar contribuindo para faltas de estoque e perda de vendas.
+            </p>
+            
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            A avaliação da área de planejamento compara a quantidade de pedidos realizados com antecedência suficiente (Full Lead Time - FLT) em relação ao total de pedidos efetuados.
+            Esse indicador permite verificar se as compras estão sendo planejadas adequadamente ou se a operação depende excessivamente de pedidos emergenciais.
+            </p>
+
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            O acompanhamento desses indicadores contribui para reduzir rupturas, melhorar a disponibilidade de produtos, aumentar o nível de serviço ao cliente e reduzir custos associados a compras urgentes.
+            </p>
+
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            <strong>Por onde começar?</strong>
+            </p>
+            
+            <ol style='font-family: Arial; font-size: 15px; color: #333;'>
+            <li>Verifique os fornecedores com menor índice de pontualidade.</li>
+            <li>Avalie os itens com maior impacto nas vendas que dependem desses fornecedores.</li>
+            <li>Analise o indicador FLT para identificar oportunidades de antecipação das compras.</li>
+            <li>Priorize ações que reduzam pedidos emergenciais e faltas de estoque.</li>
+            </ol>
+     
+            <p style='font-family: Arial; font-size: 15px; color: #333;'>
+            Atenciosamente,<br>
+            <strong>MUPE Consultoria</strong>
+            </p>
+
+            """
+            
+   
             "attachments": [
                 {
                     "filename": os.path.basename(arquivo_xlsx),
