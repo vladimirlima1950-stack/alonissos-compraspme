@@ -603,7 +603,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
             </p>
             
             <p style='font-family: Arial; font-size: 15px; color: #333;'>
-            As planilhas anexas permitem avaliar o desempenho dos fornecedores e a eficiência do processo de planejamento de compras.
+            A planilha anexa permite avaliar o desempenho dos fornecedores e a eficiência do processo de planejamento de compras.
             </p>
 
             <p style='font-family: Arial; font-size: 15px; color: #333;'>
