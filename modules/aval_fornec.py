@@ -637,7 +637,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
             </p>
 
             """
-            
+            ,
    
             "attachments": [
                 {
