@@ -633,8 +633,10 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
      
             <p style='font-family: Arial; font-size: 15px; color: #333;'>
             Atenciosamente,<br>
-            <strong>MUPE Consultoria</strong>
-            </p>
+            <p>MUPE Consultoria</p>
+            <p>Vladimir de Lima</p>
+            <p>WhatsApp 19 99783 5054</p><br>
+
 
             """
             ,
