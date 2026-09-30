@@ -1,5 +1,5 @@
-import base64
 import os
+import base64
 from datetime import datetime
 
 import duckdb
@@ -28,6 +28,88 @@ def log(msg):
             f.write(log_line + "\n")
     except Exception as e:
         print(f"Falha ao escrever log: {e}")
+        
+        
+def converte_numero(valor, padrao=0):
+    try:
+        if pd.isna(valor):
+            return padrao
+        valor = str(valor).strip()
+        if valor == "":
+            return padrao
+        if "," in valor and "." in valor:
+            if valor.rfind(".") > valor.rfind(","):
+                valor = valor.replace(",", "")
+            else:
+                valor = valor.replace(".", "")
+                valor = valor.replace(",", ".")
+        elif "," in valor:
+            valor = valor.replace(",", ".")
+        return float(valor)
+    except:
+        return padrao
+
+
+def converte_data(valor):
+    try:
+
+        if pd.isna(valor):
+            return None
+
+        valor = str(valor).strip()
+
+        if valor == "":
+            return None
+
+        data = pd.to_datetime(
+            valor,
+            errors="coerce",
+            dayfirst=True
+        )
+
+        if pd.isna(data):
+            return None
+
+        return data
+
+    except:
+        return None
+
+
+
+
+def ler_arquivo(caminho):
+    if caminho.lower().endswith(".csv"):
+        
+        try:
+            return pd.read_csv(
+                caminho,
+                sep=None,
+                engine="python",
+                encoding="latin1",
+                header=None,
+                dtype=str
+            )
+        
+        except:
+            return pd.read_csv(
+                caminho,
+                sep=";",
+                encoding="latin1",
+                header=None,
+                dtype=str
+            )
+        
+        
+    elif caminho.lower().endswith((".xlsx", ".xls")):
+        return pd.read_excel(
+            caminho,
+            header=None,
+            dtype=str
+        )
+    raise ValueError(f"Formato não suportado: {caminho}")
+
+
 
 
 # ============================================================
@@ -39,22 +121,21 @@ def validar_csv_pedidos(caminho_pedidos: str):
     if not os.path.exists(caminho_pedidos):
         return False, "Arquivo de pedidos não encontrado."
     try:
-        # Removido sep="\t" para permitir que o DuckDB auto-detecte (vírgula, ponto e vírgula ou TAB)
-        df = duckdb.read_csv(
-            caminho_pedidos, 
-            header=True, 
-            auto_detect=True, 
-            all_varchar=True
-        ).df()
-        
+        df = ler_arquivo(caminho_pedidos)
         if df.empty:
             return False, "Arquivo de pedidos está vazio."
             
-        if df.shape[1] != 6:
+            
+            
+        if df.shape[1] < 6:
             return (
                 False,
-                f"Arquivo de pedidos precisa ter 6 colunas (recebido: {df.shape[1]}). Verifique se o separador é vírgula, ponto e vírgula ou TAB.",
-            )
+                f"Arquivo de pedidos deve possuir no mínimo 6 colunas (recebido {df.shape[1]})."
+            )        
+
+
+        
+            
     except Exception as e:
         return False, f"Erro ao ler pedidos: {e}"
     return True, "Arquivo de pedidos validado com sucesso."
@@ -64,20 +145,13 @@ def validar_csv_entregas(caminho_entregas: str):
     if not os.path.exists(caminho_entregas):
         return False, "Arquivo de entregas não encontrado."
     try:
-        df = duckdb.read_csv(
-            caminho_entregas, 
-            header=True, 
-            auto_detect=True, 
-            all_varchar=True
-        ).df()
-        
+        df = ler_arquivo(caminho_entregas)
         if df.empty:
             return False, "Arquivo de entregas está vazio."
-            
         if df.shape[1] < 5:
             return (
                 False,
-                f"Arquivo de entregas precisa ter 5 colunas (recebido: {df.shape[1]}).",
+                f"Arquivo de entregas deve possuir no mínimo 5 colunas (recebido {df.shape[1]})."
             )
     except Exception as e:
         return False, f"Erro ao ler entregas: {e}"
@@ -88,24 +162,20 @@ def validar_csv_leadtime(caminho_leadtime: str):
     if not os.path.exists(caminho_leadtime):
         return False, "Arquivo de leadtime não encontrado."
     try:
-        df = duckdb.read_csv(
-            caminho_leadtime, 
-            header=True, 
-            auto_detect=True, 
-            all_varchar=True
-        ).df()
-        
+        df = ler_arquivo(caminho_leadtime)
         if df.empty:
             return False, "Arquivo de leadtime está vazio."
-            
         if df.shape[1] < 3:
             return (
                 False,
-                f"Arquivo de leadtime precisa ter 3 colunas (recebido: {df.shape[1]}).",
+                f"Arquivo de leadtime deve possuir no mínimo 3 colunas (recebido {df.shape[1]})."
             )
     except Exception as e:
         return False, f"Erro ao ler leadtime: {e}"
     return True, "Arquivo de leadtime validado com sucesso."
+
+
+
 
 # ============================================================
 # Endpoints HTTP (FastAPI)
@@ -201,7 +271,24 @@ def sp0_criar_tabelas(con):
 
 def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
     # Pedidos
-    df_ped = pd.read_csv(arq_pedidos, sep=";", dtype=str)
+    df_ped = ler_arquivo(arq_pedidos)
+    
+    if str(df_ped.iloc[0,0]).strip().upper() in [
+        "CODIGO_PEDIDO",
+        "CÓDIGO_PEDIDO",
+        "CODIGO DO PEDIDO",
+        "CÓDIGO DO PEDIDO",
+        "PEDIDO",
+        "CODIGO",
+        "CÓDIGO"
+    ]:
+            
+        df_ped = df_ped.iloc[1:]
+
+
+    
+    df_ped = df_ped.iloc[:, :6]
+    
     df_ped.columns = [
         "codigo_pedido",
         "dta_pedido",
@@ -211,17 +298,47 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
         "qde_desejada",
     ]
 
+    
+   
     df_ped["qde_desejada"] = (
         df_ped["qde_desejada"]
-        .str.replace(",", ".", regex=False)
-        .pipe(pd.to_numeric, errors="coerce")
-        .fillna(0)
+        .apply(lambda x: converte_numero(x, 0))
     )
 
-    df_ped["dta_pedido"] = pd.to_datetime(df_ped["dta_pedido"], errors="coerce", dayfirst=True)
-    df_ped["dta_desejada"] = pd.to_datetime(df_ped["dta_desejada"], errors="coerce", dayfirst=True)
+
+        
+    df_ped["dta_pedido"] = (
+        df_ped["dta_pedido"]
+        .apply(converte_data)
+    )
+    
+    
+    
+    df_ped["dta_desejada"] = (
+        df_ped["dta_desejada"]
+        .apply(converte_data)
+    )
+
 
     con.execute("DELETE FROM tb_pedidos_orig")
+    
+    df_ped = (
+        df_ped
+        .groupby(
+            [
+                "codigo_pedido",
+                "codigo_produto",
+                "codigo_fornecedor",
+                "dta_pedido",
+                "dta_desejada"
+            ],
+            as_index=False
+        )["qde_desejada"]
+        .sum()
+    )
+    
+    
+    
     con.register("df_pedidos_tmp", df_ped)
     con.execute("""
         INSERT INTO tb_pedidos_orig
@@ -235,7 +352,21 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
     """)
 
     # Entregas
-    df_ent = pd.read_csv(arq_entregas, sep=";", dtype=str)
+    df_ent = ler_arquivo(arq_entregas)
+    
+    if str(df_ent.iloc[0,0]).strip().upper() in [
+        "CODIGO_PEDIDO",
+        "CÓDIGO_PEDIDO",
+        "CODIGO DO PEDIDO",
+        "CÓDIGO DO PEDIDO",
+        "PEDIDO",
+        "CODIGO",
+        "CÓDIGO"
+    ]:
+        df_ent = df_ent.iloc[1:]
+        
+    df_ent = df_ent.iloc[:, :5]
+    
     df_ent.columns = [
         "codigo_pedido",
         "codigo_produto",
@@ -244,16 +375,34 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
         "dta_nota_fiscal",
     ]
 
+    
+
     df_ent["qde_entregue"] = (
         df_ent["qde_entregue"]
-        .str.replace(",", ".", regex=False)
-        .pipe(pd.to_numeric, errors="coerce")
-        .fillna(0)
+        .apply(lambda x: converte_numero(x, 0))
     )
 
-    df_ent["dta_nota_fiscal"] = pd.to_datetime(df_ent["dta_nota_fiscal"], errors="coerce", dayfirst=True)
+    df_ent["dta_nota_fiscal"] = (
+        df_ent["dta_nota_fiscal"]
+        .apply(converte_data)
+    )
 
     con.execute("DELETE FROM tb_entregas_orig")
+    
+    df_ent = (
+       df_ent
+        .groupby(
+            [
+                "codigo_pedido",
+                "codigo_produto",
+                "codigo_fornecedor",
+                "dta_nota_fiscal"
+            ],
+            as_index=False
+        )["qde_entregue"]
+        .sum()
+    )
+    
     con.register("df_entregas_tmp", df_ent)
     con.execute("""
         INSERT INTO tb_entregas_orig
@@ -266,21 +415,49 @@ def sp1_importar_e_limpar(con, arq_pedidos, arq_entregas, arq_leadtime):
     """)
 
     # Leadtime
-    df_lead = pd.read_csv(arq_leadtime, sep=";", dtype=str)
+    df_lead = ler_arquivo(arq_leadtime)
+    
+    if str(df_lead.iloc[0,0]).strip().upper() in [
+        "CODIGO_FORNECEDOR",
+        "CÓDIGO_FORNECEDOR",
+        "CODIGO FORNECEDOR",
+        "CÓDIGO FORNECEDOR",
+        "FORNECEDOR",
+        "CODIGO",
+        "CÓDIGO"
+    ]:
+        df_lead = df_lead.iloc[1:]
+        
+    df_lead = df_lead.iloc[:, :3]
+        
     df_lead.columns = [
         "codigo_fornecedor",
         "codigo_produto",
         "leadtime_dias",
     ]
 
+
     df_lead["leadtime_dias"] = (
         df_lead["leadtime_dias"]
-        .str.replace(",", ".", regex=False)
-        .pipe(pd.to_numeric, errors="coerce")
-        .fillna(0)
+        .apply(lambda x: converte_numero(x, 0))
     )
-
+    
     con.execute("DELETE FROM tb_leadtime_orig")
+    
+    df_lead = (
+        df_lead
+        .groupby(
+            [
+                "codigo_fornecedor",
+                "codigo_produto"
+            ],
+            as_index=False
+        )["leadtime_dias"]
+        .max()
+    )
+    
+    
+    
     con.register("df_leadtime_tmp", df_lead)
     con.execute("""
         INSERT INTO tb_leadtime_orig
