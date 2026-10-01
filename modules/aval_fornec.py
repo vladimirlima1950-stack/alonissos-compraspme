@@ -754,7 +754,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
     log(f"Enviando relatório PME para {email_destino} via Resend...")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    print("RESEND_API_KEY no módulo:", RESEND_API_KEY)
+    
     
 
     if not RESEND_API_KEY:
