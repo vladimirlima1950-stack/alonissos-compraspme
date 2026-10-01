@@ -751,6 +751,7 @@ def processar_compraspme(pedidos: str, entregas: str, leadtime: str):
 
 
 def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: str):
+    log("ENTREI NA FUNCAO ENVIAR_EMAIL_RELATORIO")
     log(f"Enviando relatório PME para {email_destino} via Resend...")
 
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -826,7 +827,7 @@ def enviar_email_relatorio(arquivo_xlsx: str, email_destino: str, nome_cliente: 
                 }
             ],
         }
-
+        
         response = requests.post(
             "https://api.resend.com/emails",
             headers={
