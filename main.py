@@ -48,7 +48,7 @@ async def upload_pedidos(file: UploadFile = File(...)):
     """Upload e validação do arquivo de pedidos."""
     global pedidos_path
     try:
-        pedidos_path = os.path.join(UPLOAD_DIR, "pedidos.csv")
+        pedidos_path = os.path.join(UPLOAD_DIR, file.filename)
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
@@ -57,9 +57,20 @@ async def upload_pedidos(file: UploadFile = File(...)):
             )
         with open(pedidos_path, "wb") as f:
             f.write(contents)
-        ok_conv, msg_conv = converter_para_utf8(pedidos_path)
-        if not ok_conv:
-            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
+            
+            
+       
+         
+
+        if pedidos_path.lower().endswith(".csv"):
+            ok_conv, msg_conv = converter_para_utf8(pedidos_path)
+            if not ok_conv:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "erro", "mensagem": msg_conv}
+            )         
+            
+            
         ok, msg = validar_csv_pedidos(pedidos_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
@@ -72,7 +83,7 @@ async def upload_entregas(file: UploadFile = File(...)):
     """Upload e validação do arquivo de entregas."""
     global entregas_path
     try:
-        entregas_path = os.path.join(UPLOAD_DIR, "entregas.csv")
+        entregas_path = os.path.join(UPLOAD_DIR, file.filename)
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
@@ -81,9 +92,21 @@ async def upload_entregas(file: UploadFile = File(...)):
             )
         with open(entregas_path, "wb") as f:
             f.write(contents)
-        ok_conv, msg_conv = converter_para_utf8(entregas_path)
-        if not ok_conv:
-            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
+            
+            
+            
+            
+        if entregas_path.lower().endswith(".csv"):
+            ok_conv, msg_conv = converter_para_utf8(entregas_path)
+            if not ok_conv:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "erro", "mensagem": msg_conv}
+                )    
+            
+            
+            
+            
         ok, msg = validar_csv_entregas(entregas_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
@@ -96,7 +119,7 @@ async def upload_leadtime(file: UploadFile = File(...)):
     """Upload e validação do arquivo de leadtime."""
     global leadtime_path
     try:
-        leadtime_path = os.path.join(UPLOAD_DIR, "leadtime.csv")
+        leadtime_path = os.path.join(UPLOAD_DIR, file.filename)
         contents = await file.read()
         if len(contents) < 10:
             return JSONResponse(
@@ -105,9 +128,20 @@ async def upload_leadtime(file: UploadFile = File(...)):
             )
         with open(leadtime_path, "wb") as f:
             f.write(contents)
-        ok_conv, msg_conv = converter_para_utf8(leadtime_path)
-        if not ok_conv:
-            return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg_conv})
+            
+            
+            
+            
+        if leadtime_path.lower().endswith(".csv"):
+            ok_conv, msg_conv = converter_para_utf8(leadtime_path)
+            if not ok_conv:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "erro", "mensagem": msg_conv}
+                )         
+
+         
+            
         ok, msg = validar_csv_leadtime(leadtime_path)
         if not ok:
             return JSONResponse(status_code=400, content={"status": "erro", "mensagem": msg})
